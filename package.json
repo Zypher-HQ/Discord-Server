@@ -1,17 +1,26 @@
 {
-  "name": "security-bot",
+  "name": "discord-roblox-verification-postgres",
   "version": "1.0.0",
-  "description": "Roblox verification and security bot",
-  "main": "index.js",
-  "type": "module",
+  "description": "A Discord bot for Roblox verification, integrated with a Neon.tech PostgreSQL database and Gemini AI.",
+  "main": "index.cjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.cjs"
   },
+  "keywords": [
+    "discord",
+    "roblox",
+    "postgres",
+    "neon",
+    "gemini"
+  ],
+  "author": "Gemini",
+  "license": "ISC",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "discord.js": "^14.23.2",
-    "dotenv": "^16.6.1",
-    "groq-sdk": "^0.33.0",
-    "node-fetch": "^3.3.2"
-  }
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.12.0"
+  },
+  "type": "commonjs"
 }
+
