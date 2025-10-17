@@ -23,6 +23,12 @@ const {
 // ## Explanation: using 'pg' Pool for Neon.tech or similar connection via DATABASE_URL.
 const { Pool } = require('pg');
 
+// --- KEEP ALIVE SERVER ---
+// ## Explanation: This keeps your Replit project alive 24/7 by running a small web server.
+// ## Do NOT remove this. Used with UptimeRobot to prevent Replit from sleeping.
+const keepAlive = require('./keep_alive.js');
+keepAlive(); // ✅ Starts the Express web server immediately
+
 // --- 1. Configuration Constants ---
 // ## Explanation: These values are expected to be provided via environment variables (.env in Replit).
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN; 
