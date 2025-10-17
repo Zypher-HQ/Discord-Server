@@ -23,9 +23,6 @@ const {
 // ## Explanation: using 'pg' Pool for Neon.tech or similar connection via DATABASE_URL.
 const { Pool } = require('pg');
 
-const { Client, GatewayIntentBits } = require("discord.js");
-const { Pool } = require("pg");
-
 // --- Keep Alive Web Dashboard ---
 const keepAlive = require("./keep_alive.js");
 keepAlive(); // 🟢 Starts web dashboard for uptime + logs
