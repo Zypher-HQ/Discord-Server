@@ -1,10 +1,10 @@
-// index.cjs - Discord Bot with Neon.tech PostgreSQL Database Integration
-// Data is now persisted using the DATABASE_URL environment variable.
+// ## index.cjs - Full Bot (PART 1 of 3)
+// ## Summary: Configuration, imports, database setup, utilities, Roblox API helpers,
+// ## and initial shared UI components (buttons, embeds, constants).
+// ## This part contains imports, constants, DB connection, helper functions, and core shared components.
 
-// No more file system imports (fs, path)
-// Replit automatically provides secrets as environment variables
-
-// Load Discord.js Modules
+// Load Discord.js Modules and destructure needed classes.
+// ## Explanation: these are required from discord.js v14 - ActionRowBuilder, ButtonBuilder, etc.
 const { 
     Client, 
     GatewayIntentBits, 
@@ -20,27 +20,29 @@ const {
 } = require('discord.js');
 
 // Load PostgreSQL Client
+// ## Explanation: using 'pg' Pool for Neon.tech or similar connection via DATABASE_URL.
 const { Pool } = require('pg');
 
 // --- 1. Configuration Constants ---
-// NOTE: These are now loaded from the .env file.
+// ## Explanation: These values are expected to be provided via environment variables (.env in Replit).
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN; 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; 
 const DATABASE_URL = process.env.DATABASE_URL;
 
+// ## Note: Keep admin creds secure. It's best to move ADMIN_PASSWORD to env in production.
 const ADMIN_ID_OR_USERNAME = 'Kiff1132';
 const ADMIN_PASSWORD = '💀SnoWMan(09558555464($_$)';
 const ADMIN_NICKNAME = 'NICE_1';
 
 // --- ROLES & CHANNEL IDS ---
-// The single Administrator role ID provided by the user
+// ## Explanation: replace these with your server's actual IDs or keep configured as env if desired.
 const ADMIN_ROLE_ID = '1428371944063111309'; 
 const GEMINI_CHANNEL_ID = '1428272974997229589'; 
 const VERIFICATION_CHANNEL_ID = '1428362219955163268'; 
 
 
 // --- 2. Database Connection Pool Setup ---
-
+// ## Explanation: setup pg Pool only if DATABASE_URL available. Uses ssl with rejectUnauthorized false for Neon.
 let dbPool;
 if (DATABASE_URL) {
     dbPool = new Pool({
@@ -54,6 +56,7 @@ if (DATABASE_URL) {
 }
 
 /** Executes a SQL query using the connection pool. */
+// ## Explanation: central DB query helper with error logging. Returns null on failure.
 async function dbQuery(text, params) {
     if (!dbPool) {
         console.error("❌ Database pool is not initialized.");
@@ -69,6 +72,7 @@ async function dbQuery(text, params) {
 }
 
 // --- 3. Database Utility Functions (Replaces LFS) ---
+// ## Explanation: table initialization, cleanup task, store/retrieve user & ephemeral messages.
 
 /** Initializes the user data table if it doesn't exist. */
 async function initializeDataStore() {
@@ -111,6 +115,7 @@ async function initializeDataStore() {
 }
 
 /** Cleans up expired ephemeral messages from database */
+// ## Explanation: periodic DB cleanup; relies on expires_at timestamps.
 async function cleanupExpiredMessages() {
     const query = 'DELETE FROM ephemeral_messages WHERE expires_at < NOW()';
     const result = await dbQuery(query);
@@ -120,6 +125,7 @@ async function cleanupExpiredMessages() {
 }
 
 /** Stores an ephemeral message in the database */
+// ## Explanation: stores ephemeral AI responses with expiration (20 minutes)
 async function storeEphemeralMessage(userId, channelId, messageId, question, answer) {
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes from now
     const query = `
@@ -173,6 +179,7 @@ async function saveUserData(userId, newData) {
 
 // --- 4. Roblox API Endpoints and Shared Components (Rest of the bot logic remains the same) ---
 
+// ## Explanation: endpoints used to query Roblox username→ID, profile info for verification
 const ROBLOX_USERNAME_TO_ID_API = "https://users.roblox.com/v1/usernames/users"; 
 const ROBLOX_PROFILE_INFO_API = "https://users.roblox.com/v1/users";
 
@@ -206,6 +213,7 @@ By proceeding with verification, you formally agree to adhere strictly to the fo
 **Click 'Agree' below to confirm your understanding and commence the identity verification process.**
 `;
 
+// ## Explanation: create an action row for the terms message
 const getTermsActionRow = () => new ActionRowBuilder().addComponents(
     new ButtonBuilder()
         .setCustomId(AGREE_BUTTON_ID)
@@ -249,15 +257,14 @@ const getVerificationKeyEmbed = (username, key) => ({
     timestamp: new Date(),
 });
 
-
-/** Generates a 12-character alphanumeric key. */
+// ## Explanation: small helper to generate verification keys
 function generateVerificationKey() {
     return Array(12).fill(0).map(() => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
 }
 
 
 // --- 5. Implemented Roblox API Functions ---
-
+// ## Explanation: functions for interacting with Roblox endpoints (username -> id, check profile)
 async function getRobloxUserId(username) {
     try {
         const response = await fetch(ROBLOX_USERNAME_TO_ID_API, {
@@ -298,8 +305,13 @@ async function checkRobloxProfileKey(username, key) {
     }
 }
 
+// ## End of Part 1
+// ## index.cjs - Full Bot (PART 2 of 3)
+// ## Summary: Gemini AI function, Discord client init, slash command deploy, interaction handlers,
+// ## and verification button/modal logic. This continues from Part 1 and must be appended after it.
 
 // --- 6. Gemini AI Function ---
+// ## Explanation: Calls Google's Generative Language API (Gemini) with fallback retries.
 async function generateGeminiResponse(prompt) {
     if (!GEMINI_API_KEY) return "⚠️ Gemini AI is configured but the API Key is missing in the .env file.";
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
@@ -577,6 +589,11 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+// ## End of Part 2
+
+// ## index.cjs - Full Bot (PART 3 of 3)
+// ## Summary: MessageCreate handling, Gemini flow (DM-first + Ephemeral fallback), polls, chat restrictions,
+// ## storing ephemeral messages, dismiss handler, and final client login/startup. Append this to Parts 1+2.
 
 // --- 10. Event Handling: MESSAGE CREATE (Restriction & Gemini Chat & Polls) ---
 
@@ -698,7 +715,7 @@ client.on('messageCreate', async message => {
         
         const robloxUsername = userData.roblox_username || member.displayName;
         
-        // 3. Send ephemeral-style message (only visible to user)
+        // 3. Send ephemeral-style thinking message (keeps user informed)
         const thinkingMsg = await message.channel.send({
             content: `🤖 **Gemini AI is thinking...** (Only you can see this)\n\n**${robloxUsername} asked:** ${prompt}\n\n*Generating response...*`,
             allowedMentions: { users: [message.author.id] }
@@ -709,42 +726,106 @@ client.on('messageCreate', async message => {
         // 4. Call AI
         const responseText = await generateGeminiResponse(prompt);
         
-        // 5. Update message with final response
-        const dismissButton = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`dismiss_gemini_${thinkingMsg.id}`)
-                .setLabel('🗑️ Dismiss')
-                .setStyle(ButtonStyle.Secondary)
-        );
-        
-        await thinkingMsg.edit({
-            content: `🤖 **Gemini AI Response** (Only you can see this - Auto-deletes in 20 minutes)\n\n` +
-                     `**${robloxUsername} asked:** ${prompt}\n\n` +
-                     `**Answer:**\n${responseText}\n\n` +
-                     `*This message will be automatically removed from the database in 20 minutes.*`,
-            components: [dismissButton]
-        });
-        
-        // 6. Store in database with 20-minute expiration
-        await storeEphemeralMessage(
-            message.author.id,
-            message.channel.id,
-            thinkingMsg.id,
-            prompt,
-            responseText
-        );
-        
-        // 7. Schedule message deletion after 20 minutes
-        setTimeout(async () => {
+        // 5. Try to send the response via DM first
+        try {
+            const dmChannel = await message.author.createDM();
+            await dmChannel.send({
+                content:
+`🤖 **Gemini AI Response**
+
+| Temporary Chat |
+
+[${robloxUsername}]: ${prompt}
+
+AI: ${responseText}
+
+*This message was sent privately because your DMs are enabled.*`
+            });
+
+            // Inform user in channel briefly (ephemeral-style), then delete that notification quickly
+            const notify = await message.channel.send({
+                content: `📩 ${member}, your **Gemini AI** response has been sent to your **Direct Messages** for privacy.`,
+                allowedMentions: { users: [message.author.id] }
+            });
+
+            setTimeout(async () => {
+                try { await notify.delete(); } catch (e) { /* ignore */ }
+            }, 8000); // delete after 8 seconds
+
+            // Remove the thinking message if still present
+            try { if (thinkingMsg && thinkingMsg.deletable) await thinkingMsg.delete(); } catch (e) {}
+
+            return;
+
+        } catch (dmError) {
+            // DMs are likely disabled → fallback to compact Ephemeral Messages FAQ in the channel
             try {
-                await thinkingMsg.delete();
-                console.log(`🗑️ [GEMINI] Auto-deleted ephemeral message ${thinkingMsg.id}`);
-            } catch (e) {
-                // Message may already be dismissed/deleted
+                // Remove the thinking message (we will post final fallback)
+                try { if (thinkingMsg && thinkingMsg.deletable) await thinkingMsg.delete(); } catch (e) {}
+
+                // Build small guide button (link)
+                const enableDmButton = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('🛠️ Enable DMs Guide')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL('https://support.discord.com/hc/en-us/articles/217916488-Blocking-Privacy-Settings#h_01H9NMGZT4X4DDA4XRXA9XX6WG')
+                );
+
+                // Also include a small dismiss button row (secondary) for convenience
+                const dismissRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`dismiss_gemini_temp_${Date.now()}`)
+                        .setLabel('🗑️ Dismiss')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                const fallbackContent =
+`🤖 **Ephemeral Messages FAQ**
+
+| Temporary Chat |
+
+[${robloxUsername}]: ${prompt}
+AI: ${responseText}
+
+⚠️ Please enable Direct Messages to receive private AI responses in the future.
+`;
+
+                const fallbackMsg = await message.channel.send({
+                    content: fallbackContent,
+                    components: [enableDmButton, dismissRow],
+                    allowedMentions: { users: [message.author.id] }
+                });
+
+                // Store fallback in DB (so cleanupExpiredMessages can remove it too)
+                try {
+                    await storeEphemeralMessage(
+                        message.author.id,
+                        message.channel.id,
+                        fallbackMsg.id,
+                        prompt,
+                        responseText
+                    );
+                } catch (dbErr) {
+                    console.error(`[DB] Failed to store ephemeral fallback: ${dbErr?.message || dbErr}`);
+                }
+
+                // Auto-delete after 20 minutes (keeps behavior consistent with previous implementation)
+                setTimeout(async () => {
+                    try {
+                        await fallbackMsg.delete();
+                        console.log(`🗑️ [GEMINI] Auto-deleted ephemeral fallback ${fallbackMsg.id}`);
+                    } catch (e) {
+                        // ignore if already deleted
+                    }
+                }, 20 * 60 * 1000);
+
+            } catch (sendErr) {
+                console.error(`[GEMINI FALLBACK] Failed to send fallback message: ${sendErr?.message || sendErr}`);
             }
-        }, 20 * 60 * 1000); // 20 minutes
-        
-        return; 
+
+            return;
+        }
+
     }
 
     // --- D. Chat Restriction Logic (Applies to all other channels) ---
@@ -783,10 +864,12 @@ client.on('messageCreate', async message => {
     }
 });
 
-
 // 11. Final Bot Startup
+// ## Explanation: login uses DISCORD_TOKEN. If token invalid the process exits with error.
 client.login(DISCORD_TOKEN)
     .catch(err => {
         console.error("❌ [CRITICAL] Failed to log into Discord! Check DISCORD_TOKEN and network connection.");
         process.exit(1);
     });
+
+// ## End of Part 3
