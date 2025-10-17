@@ -635,25 +635,57 @@ client.on('messageCreate', async message => {
             return; 
         }
 
-        // 2. Delete original user message instantly for privacy (as requested)
+        // 2. Delete original user message instantly for privacy
         try {
             await message.delete();
         } catch (error) {
             console.error(`[GEMINI PRIVACY] Failed to delete user message: Missing Permissions.`);
         }
         
-        // 3. Bot sends the initial "Log" message 
-        const robloxUsername = userData.roblox_username || member.displayName;
-        const logMessage = await message.channel.send(`**${robloxUsername}:** ${prompt} *(Thinking...)*`);
-        
-        await message.channel.sendTyping();
-        
-        // 4. Call AI
-        const responseText = await generateGeminiResponse(prompt);
-        
-        // 5. Edit the "Log" message to include the final AI response
-        const finalContent = `**${robloxUsername}:** ${prompt}\n\n---\n\n${responseText}`;
-        await logMessage.edit(finalContent);
+        // 3. Try to send DM to user
+        try {
+            const robloxUsername = userData.roblox_username || member.displayName;
+            
+            // Send initial "Thinking..." DM
+            const dmChannel = await message.author.createDM();
+            const thinkingMsg = await dmChannel.send(`🤖 **Gemini AI is thinking...**\n\n**Your question:** ${prompt}\n\n*Generating response...*`);
+            
+            // 4. Call AI
+            const responseText = await generateGeminiResponse(prompt);
+            
+            // 5. Edit DM with final response
+            await thinkingMsg.edit(`🤖 **Gemini AI Response**\n\n**Your question:** ${prompt}\n\n**Answer:**\n${responseText}`);
+            
+        } catch (dmError) {
+            // DMs are disabled - send warning in channel with instructions
+            const enableDMButton = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('📖 How to Enable DMs')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL('https://support.discord.com/hc/en-us/articles/217916488-Blocking-Privacy-Settings')
+            );
+            
+            const warningMsg = await message.channel.send({
+                content: `${message.author} ⚠️ **I cannot send you a DM!**\n\n` +
+                         `To use Gemini AI, you need to enable Direct Messages from server members.\n\n` +
+                         `**How to enable:**\n` +
+                         `1. Right-click this server name\n` +
+                         `2. Select "Privacy Settings"\n` +
+                         `3. Toggle ON "Direct Messages"\n` +
+                         `4. Try your question again!\n\n` +
+                         `Click the button below for detailed instructions.`,
+                components: [enableDMButton]
+            });
+            
+            // Delete warning after 30 seconds
+            setTimeout(async () => {
+                try {
+                    await warningMsg.delete();
+                } catch (e) {
+                    // Ignore if already deleted
+                }
+            }, 30000);
+        }
         
         return; 
     }
