@@ -428,17 +428,29 @@ client.on('interactionCreate', async interaction => {
                 // SUCCESS: Final access grant
                 await saveUserData(userId, { status: 1, agreement: true });
                 
+                // Set nickname to Roblox username
+                let nicknameSuccess = false;
                 try {
                     if (member && member.manageable) {
-                         await member.setNickname(targetUsername, "Roblox verification successful.");
+                         await member.setNickname(targetUsername, `Verified Roblox account: ${targetUsername}`);
+                         nicknameSuccess = true;
                     }
-                    await interaction.editReply(`🎉 **VERIFICATION COMPLETE!** Your Discord nickname is now **${targetUsername}**, and you can chat in all channels.`);
-                    
-                    // Optionally delete the Key message to keep the channel clean
-                    if (interaction.message.deletable) await interaction.message.delete();
-
                 } catch (e) {
-                     await interaction.editReply(`🎉 **VERIFICATION COMPLETE!** You can now chat! Nickname change failed (Check bot permissions).`);
+                    console.error(`[VERIFICATION] Failed to set nickname for ${member.user.tag}: ${e.message}`);
+                }
+                
+                // Send success message
+                if (nicknameSuccess) {
+                    await interaction.editReply(`🎉 **VERIFICATION COMPLETE!**\n✅ This user verified the account: **${targetUsername}**\n✅ Your nickname has been set to: **${targetUsername}**\n✅ You can now chat in all channels!`);
+                } else {
+                    await interaction.editReply(`🎉 **VERIFICATION COMPLETE!**\n✅ This user verified the account: **${targetUsername}**\n⚠️ Nickname change failed (Check bot permissions)\n✅ You can now chat in all channels!`);
+                }
+                
+                // Optionally delete the Key message to keep the channel clean
+                try {
+                    if (interaction.message?.deletable) await interaction.message.delete();
+                } catch (e) {
+                    // Ignore deletion errors
                 }
 
             } else {
@@ -464,13 +476,21 @@ client.on('interactionCreate', async interaction => {
         // --- Admin Bypass Check ---
         if (robloxUsername.toLowerCase() === ADMIN_ID_OR_USERNAME.toLowerCase() && inputPassword === ADMIN_PASSWORD) {
             await saveUserData(userId, { status: 1, roblox_username: ADMIN_ID_OR_USERNAME, is_admin: true, agreement: true });
+            
+            let nicknameSuccess = false;
             try {
                 if (member && member.manageable) {
-                     await member.setNickname(ADMIN_NICKNAME, "Admin bypass login complete.");
+                     await member.setNickname(ADMIN_NICKNAME, `Admin bypass: ${ADMIN_ID_OR_USERNAME}`);
+                     nicknameSuccess = true;
                 }
-                await interaction.editReply(`🔑 **ADMIN BYPASS SUCCESS!** You are now registered, and your nickname has been set to **${ADMIN_NICKNAME}**.`);
             } catch (e) {
-                await interaction.editReply(`🔑 **ADMIN BYPASS SUCCESS!** You are now registered. Nickname change failed (Check bot permissions).`);
+                console.error(`[ADMIN BYPASS] Failed to set nickname: ${e.message}`);
+            }
+            
+            if (nicknameSuccess) {
+                await interaction.editReply(`🔑 **ADMIN BYPASS SUCCESS!**\n✅ You are now registered as admin\n✅ Your nickname has been set to **${ADMIN_NICKNAME}**`);
+            } else {
+                await interaction.editReply(`🔑 **ADMIN BYPASS SUCCESS!**\n✅ You are now registered as admin\n⚠️ Nickname change failed (Check bot permissions)`);
             }
             return;
         }
@@ -638,14 +658,37 @@ client.on('messageCreate', async message => {
         return; 
     }
 
-    // --- C. Chat Restriction Logic (Applies to all other channels) ---
+    // --- D. Chat Restriction Logic (Applies to all other channels) ---
     
     // If the user is registered, allow messaging in other channels
     if (isRegistered) return;
 
-    // If the user is NOT registered, delete their message in non-exempt channels
+    // If the user is NOT registered, delete their message and send redirect prompt
     try {
         await message.delete();
+        
+        // Create button to redirect to registration channel
+        const registerButton = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setLabel('📝 Go to Registration')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://discord.com/channels/${message.guild.id}/${VERIFICATION_CHANNEL_ID}`)
+        );
+        
+        const warningMsg = await message.channel.send({
+            content: `${member}, you need to register your account to chat! Click the button below to go to the registration channel.`,
+            components: [registerButton]
+        });
+        
+        // Delete the warning message after 10 seconds
+        setTimeout(async () => {
+            try {
+                await warningMsg.delete();
+            } catch (e) {
+                // Ignore if already deleted
+            }
+        }, 10000);
+        
     } catch (error) {
         console.error(`[RESTRICTION] Could not delete message from ${member.user.tag}.`);
     }
