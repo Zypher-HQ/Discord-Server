@@ -1,0 +1,26 @@
+{
+  "users": {
+    "1393473211160727652": {
+      "phase": "VERIFIED",
+      "username": "Kiff1132",
+      "robloxId": 4019264559,
+      "key": "r1qKMiT3cccp",
+      "verified": true,
+      "ts": 1760538359324
+    }
+  },
+  "linked": {
+    "4019264559": [
+      "1393473211160727652"
+    ]
+  },
+  "ownerUnlockUntil": 0,
+  "settings": {},
+  "1393473211160727652": {
+    "status": 1,
+    "robloxUsername": "Kiff1132",
+    "verificationKey": "N3VY2O59BAB3",
+    "agreement": true,
+    "is_admin": true
+  }
+}
