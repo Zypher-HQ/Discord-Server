@@ -494,14 +494,12 @@ client.on('interactionCreate', async interaction => {
             agreement: true 
         });
         
-        // Send the Key Verification message in the channel
-        await interaction.channel.send({
-            content: `<@${userId}>, please complete step 2.`,
+        // Send ephemeral response with the key (only visible to user)
+        await interaction.editReply({
+            content: `✅ **Username \`${robloxUsername}\` set.**\n\n`,
             embeds: [getVerificationKeyEmbed(robloxUsername, newKey)],
             components: [getVerificationKeyActionRow(newKey)],
         });
-
-        await interaction.editReply(`✅ **Username \`${robloxUsername}\` set.** Please see the new message above for your **Verification Key** and the next step!`);
     }
 });
 
@@ -519,11 +517,17 @@ client.on('messageCreate', async message => {
     const userData = await getUserData(member.id);
     const isRegistered = userData && userData.status === 1;
     
-    // Check if the message is in an exempt channel
-    const isExemptChannel = message.channel.id === VERIFICATION_CHANNEL_ID || message.channel.id === GEMINI_CHANNEL_ID;
+    // --- A. Verification Channel Privacy Logic (Delete ALL user messages) ---
+    if (message.channel.id === VERIFICATION_CHANNEL_ID) {
+        try {
+            await message.delete();
+        } catch (error) {
+            console.error(`[VERIFICATION PRIVACY] Could not delete message from ${member.user.tag}. Check bot's 'Manage Messages' permission.`);
+        }
+        return; // Stop processing - verification channel is fully private
+    }
 
-
-    // --- A. Gemini AI Chat Logic (Runs ONLY in the dedicated AI channel) ---
+    // --- B. Gemini AI Chat Logic (Runs ONLY in the dedicated AI channel) ---
     if (message.channel.id === GEMINI_CHANNEL_ID) {
         
         const prompt = message.content.trim();
@@ -563,18 +567,16 @@ client.on('messageCreate', async message => {
         return; 
     }
 
-    // --- B. Chat Restriction Logic (Applies to all other channels) ---
+    // --- C. Chat Restriction Logic (Applies to all other channels) ---
     
-    // If the channel is exempt or the user is registered, do nothing.
-    if (isExemptChannel || isRegistered) return;
+    // If the user is registered, allow messaging in other channels
+    if (isRegistered) return;
 
-    // If the user is NOT registered and is NOT in an exempt channel, delete their message.
-    if (!isRegistered) {
-        try {
-            await message.delete();
-        } catch (error) {
-            console.error(`[RESTRICTION] Could not delete message from ${member.user.tag}.`);
-        }
+    // If the user is NOT registered, delete their message in non-exempt channels
+    try {
+        await message.delete();
+    } catch (error) {
+        console.error(`[RESTRICTION] Could not delete message from ${member.user.tag}.`);
     }
 });
 
