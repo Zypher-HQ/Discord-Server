@@ -1,8 +1,8 @@
 // index.cjs - Discord Bot with Neon.tech PostgreSQL Database Integration
 // Data is now persisted using the DATABASE_URL environment variable.
 
-require('dotenv').config();
 // No more file system imports (fs, path)
+// Replit automatically provides secrets as environment variables
 
 // Load Discord.js Modules
 const { 
