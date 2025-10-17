@@ -527,8 +527,20 @@ client.on('messageCreate', async message => {
         return; // Stop processing - verification channel is fully private
     }
 
-    // --- B. Poll Command Handler (Available to all registered users) ---
+    // --- B. Poll Command Handler (Available to all registered users in Announcement Channel only) ---
     if (message.content.startsWith('!poll')) {
+        // Check if user is in the correct channel
+        const ANNOUNCEMENT_CHANNEL_ID = '1428175755405295626';
+        
+        if (message.channel.id !== ANNOUNCEMENT_CHANNEL_ID) {
+            try {
+                await message.delete();
+            } catch (error) {
+                console.error(`[POLL] Could not delete poll command from wrong channel.`);
+            }
+            return;
+        }
+
         // Check if user is registered
         if (!isRegistered) {
             try {
