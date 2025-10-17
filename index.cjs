@@ -1,10 +1,8 @@
-// index.cjs - The Complete User Verification and Moderation Agent
-// Features: Local Storage (LFS), Roblox API Verification, Admin Bypass, Chat Restriction, and Gemini AI Chat.
-// NOTE: Channels are now distinctly configured for Verification and Gemini AI.
+// index.cjs - Discord Bot with Neon.tech PostgreSQL Database Integration
+// Data is now persisted using the DATABASE_URL environment variable.
 
 require('dotenv').config();
-const fs = require('fs').promises;
-const path = require('path');
+// No more file system imports (fs, path)
 
 // Load Discord.js Modules
 const { 
@@ -13,7 +11,6 @@ const {
     ApplicationCommandType, 
     REST, 
     Routes,
-    ChannelType,
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,
@@ -22,34 +19,125 @@ const {
     TextInputStyle
 } = require('discord.js');
 
+// Load PostgreSQL Client
+const { Pool } = require('pg');
+
 // --- 1. Configuration Constants ---
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+// NOTE: These are now loaded from the .env file.
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN; 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; 
+const DATABASE_URL = process.env.DATABASE_URL;
+
 const ADMIN_ID_OR_USERNAME = 'Kiff1132';
 const ADMIN_PASSWORD = '💀SnoWMan(09558555464($_$)';
 const ADMIN_NICKNAME = 'NICE_1';
 
-// --- CHANNEL IDS ---
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY; 
-// *** DEDICATED AI CHAT CHANNEL ***
+// --- ROLES & CHANNEL IDS ---
+// The single Administrator role ID provided by the user
+const ADMIN_ROLE_ID = '1428371944063111309'; 
 const GEMINI_CHANNEL_ID = '1428272974997229589'; 
-// *** DEDICATED VERIFICATION CHANNEL (Buttons/Modals/Deploy) ***
 const VERIFICATION_CHANNEL_ID = '1428362219955163268'; 
 
-// --- CRITICAL PATH CONFIGURATION (Local File System) ---
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE_PATH = path.join(DATA_DIR, 'users.json');
 
-// --- 2. Roblox API Endpoints ---
+// --- 2. Database Connection Pool Setup ---
+
+let dbPool;
+if (DATABASE_URL) {
+    dbPool = new Pool({
+        connectionString: DATABASE_URL,
+        ssl: {
+            // Neon requires SSL. Use rejectUnauthorized: false if needed, 
+            // but true is preferred for security if using a valid certificate.
+            rejectUnauthorized: false 
+        }
+    });
+}
+
+/** Executes a SQL query using the connection pool. */
+async function dbQuery(text, params) {
+    if (!dbPool) {
+        console.error("❌ Database pool is not initialized.");
+        return null;
+    }
+    try {
+        const res = await dbPool.query(text, params);
+        return res;
+    } catch (e) {
+        console.error("❌ [DB ERROR] Query failed:", e.message, "Query:", text);
+        return null;
+    }
+}
+
+// --- 3. Database Utility Functions (Replaces LFS) ---
+
+/** Initializes the user data table if it doesn't exist. */
+async function initializeDataStore() {
+    if (!dbPool) return console.error("FATAL: Cannot initialize database. DATABASE_URL is missing.");
+
+    const query = `
+        CREATE TABLE IF NOT EXISTS users (
+            discord_id VARCHAR(20) PRIMARY KEY,
+            status INTEGER DEFAULT 0, -- 0: Unverified, 1: Verified
+            roblox_username VARCHAR(100),
+            verification_key VARCHAR(12),
+            agreement BOOLEAN DEFAULT FALSE,
+            is_admin BOOLEAN DEFAULT FALSE
+        );
+    `;
+    const result = await dbQuery(query);
+    if (result) console.log("✅ [DB] User data table initialized successfully.");
+}
+
+/** Retrieves user data from the database. */
+async function getUserData(userId) {
+    const query = 'SELECT * FROM users WHERE discord_id = $1';
+    const res = await dbQuery(query, [userId]);
+    
+    // Return the database row or null if not found
+    return res && res.rows.length > 0 ? res.rows[0] : null;
+}
+
+/** Inserts or updates user data. */
+async function saveUserData(userId, newData) {
+    // Merge default structure for robust upsert operation
+    const currentData = await getUserData(userId) || {
+        discord_id: userId,
+        status: 0,
+        roblox_username: null,
+        verification_key: null,
+        agreement: false,
+        is_admin: false
+    };
+
+    const data = { ...currentData, ...newData, discord_id: userId };
+
+    const query = `
+        INSERT INTO users (discord_id, status, roblox_username, verification_key, agreement, is_admin)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (discord_id) DO UPDATE 
+        SET status = $2, roblox_username = $3, verification_key = $4, agreement = $5, is_admin = $6;
+    `;
+    const params = [
+        data.discord_id,
+        data.status,
+        data.roblox_username,
+        data.verification_key,
+        data.agreement,
+        data.is_admin
+    ];
+    
+    await dbQuery(query, params);
+}
+
+
+// --- 4. Roblox API Endpoints and Shared Components (Rest of the bot logic remains the same) ---
+
 const ROBLOX_USERNAME_TO_ID_API = "https://users.roblox.com/v1/usernames/users"; 
 const ROBLOX_PROFILE_INFO_API = "https://users.roblox.com/v1/users";
-
-
-// --- 3. Interaction Components & Content ---
 
 // Shared Components
 const AGREE_BUTTON_ID = 'verify_agree';
 const REGISTER_BUTTON_ID = 'verify_register';
-const CHANGE_PROFILE_BUTTON_ID = 'verify_change_profile'; // Informational
 const USERNAME_MODAL_ID = 'modal_username_submit';
 const USERNAME_INPUT_ID = 'input_roblox_username';
 const PASSWORD_INPUT_ID = 'input_admin_password';
@@ -62,7 +150,7 @@ This agreement outlines the mandatory terms for full access to our community ser
 
 ### I. Identity Verification Mandate (Anti-Bot & Security)
 To mitigate unauthorized access, spam bots, and identity misrepresentation, all users must complete a Roblox account linkage. This is a crucial, one-time process.
-* **Data Usage:** Your current Roblox username will be stored securely on the server host's Local File System (LFS) for persistent identity verification. It will also be displayed as your Discord nickname. No other personally identifiable information (PII) is collected or stored.
+* **Data Usage:** Your current Roblox username will be stored securely in our **PostgreSQL database (Neon.tech)** for persistent identity verification. It will also be displayed as your Discord nickname. No other personally identifiable information (PII) is collected or stored.
 * **Access Compliance:** Failure to successfully complete the verification process will result in the automatic deletion of any messages sent in general communication channels.
 
 ### II. Code of Conduct & Server Rules
@@ -91,7 +179,6 @@ const getVerificationKeyActionRow = (key) => new ActionRowBuilder().addComponent
         .setLabel('📋 Register & Verify Profile Key')
         .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
-        // FIX: Removed setCustomId here to resolve the RangeError
         .setLabel('➡️ Instructions: Change Profile')
         .setStyle(ButtonStyle.Link) // Link buttons must use Link style
         .setURL('https://www.roblox.com/users/profile'), // Direct link to user's profile
@@ -125,43 +212,6 @@ const getVerificationKeyEmbed = (username, key) => ({
 /** Generates a 12-character alphanumeric key. */
 function generateVerificationKey() {
     return Array(12).fill(0).map(() => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
-}
-
-
-// --- 4. Local File System Utility Functions (LFS) ---
-
-async function initializeDataStore() {
-    try {
-        await fs.mkdir(DATA_DIR, { recursive: true });
-        try { await fs.access(DATA_FILE_PATH); } catch (error) { await fs.writeFile(DATA_FILE_PATH, '{}', 'utf8'); }
-    } catch (e) {
-        console.error(`❌ [LFS ERROR] Failed to initialize data store: ${e.message}`);
-    }
-}
-
-async function readAllUserData() {
-    try {
-        const data = await fs.readFile(DATA_FILE_PATH, 'utf8');
-        return JSON.parse(data);
-    } catch (e) { return {}; }
-}
-
-async function saveUserData(userId, newData) {
-    const allData = await readAllUserData();
-    allData[userId] = { 
-        ...(allData[userId] || { status: 0, robloxUsername: null, verificationKey: null, agreement: false, is_admin: false }),
-        ...newData 
-    };
-    try {
-        await fs.writeFile(DATA_FILE_PATH, JSON.stringify(allData, null, 2), 'utf8');
-    } catch (e) {
-        console.error(`❌ [LFS ERROR] Failed to write data for user ${userId}: ${e.message}`);
-    }
-}
-
-async function getUserData(userId) {
-    const allData = await readAllUserData();
-    return allData[userId] || null;
 }
 
 
@@ -208,7 +258,7 @@ async function checkRobloxProfileKey(username, key) {
 }
 
 
-// --- 6. New Gemini AI Function ---
+// --- 6. Gemini AI Function ---
 async function generateGeminiResponse(prompt) {
     if (!GEMINI_API_KEY) return "⚠️ Gemini AI is configured but the API Key is missing in the .env file.";
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
@@ -262,7 +312,7 @@ const client = new Client({
 
 
 client.on('ready', async () => {
-    await initializeDataStore();
+    await initializeDataStore(); // Database Initialization
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     const clientId = client.user.id;
     
@@ -272,8 +322,8 @@ client.on('ready', async () => {
     
     console.log(`\n======================================================`);
     console.log(`✅ [CORE] Logged in as ${client.user.tag}!`);
-    console.log(`✅ [MODERATION] Verification Channel: ${VERIFICATION_CHANNEL_ID}`);
-    console.log(`✅ [AI] Gemini Channel: ${GEMINI_CHANNEL_ID}`);
+    console.log(`✅ [DATA] Using Neon.tech PostgreSQL for persistence.`);
+    console.log(`✅ [ADMIN] Admin Role ID Configured: ${ADMIN_ROLE_ID}`);
     console.log(`======================================================\n`);
 });
 
@@ -282,15 +332,20 @@ client.on('ready', async () => {
 client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'deploy_verification_message') {
-            // Using flags for non-deprecated ephemeral reply
-            await interaction.deferReply({ ephemeral: true });
+            const member = interaction.member;
+
+            // Using flags: 64 is the InteractionResponseFlags.Ephemeral constant
+            await interaction.deferReply({ flags: 64 });
 
             if (interaction.channelId !== VERIFICATION_CHANNEL_ID) {
                 return interaction.editReply(`❌ This command must be run in the designated verification channel: \`${VERIFICATION_CHANNEL_ID}\``);
             }
-            // Check if the user is the guild owner or a specific trusted admin if needed
-            if (interaction.user.id !== interaction.guild.ownerId) { 
-                 return interaction.editReply(`❌ Only the server owner can deploy this message.`);
+            
+            // --- ROLE CHECK ---
+            const isAdminByRole = member.roles.cache.has(ADMIN_ROLE_ID);
+
+            if (interaction.user.id !== interaction.guild.ownerId && !isAdminByRole) { 
+                 return interaction.editReply(`❌ Only the server owner or a user with the correct Admin role (ID: \`${ADMIN_ROLE_ID}\`) can deploy this message.`);
             }
 
             // Deploy the persistent message
@@ -310,8 +365,10 @@ client.on('interactionCreate', async interaction => {
 client.on('interactionCreate', async interaction => {
     const userId = interaction.user.id;
     const member = interaction.member;
+    // Check database for user data
     let userData = await getUserData(userId);
-    if (!userData) { userData = { status: 0, robloxUsername: null, verificationKey: null, agreement: false, is_admin: false }; }
+    // Convert to a standard object if not found, to simplify logic
+    if (!userData) { userData = { status: 0, roblox_username: null, verification_key: null, agreement: false, is_admin: false }; }
 
     // Block interaction if already registered
     if (userData.status === 1 && interaction.customId?.startsWith('verify_')) {
@@ -354,15 +411,16 @@ client.on('interactionCreate', async interaction => {
         
         // 2. Register Button Click (Final API Check)
         else if (interaction.customId === REGISTER_BUTTON_ID) {
-            await interaction.deferReply({ ephemeral: true });
+            // Using flags: 64 is the InteractionResponseFlags.Ephemeral constant
+            await interaction.deferReply({ flags: 64 });
 
-            if (!userData.robloxUsername || !userData.verificationKey) {
+            if (!userData.roblox_username || !userData.verification_key) {
                  await interaction.editReply("⚠️ You have not set your username. Please start the process from the beginning.");
                  return;
             }
 
-            const currentKey = userData.verificationKey;
-            const targetUsername = userData.robloxUsername;
+            const currentKey = userData.verification_key;
+            const targetUsername = userData.roblox_username;
             
             const profileVerified = await checkRobloxProfileKey(targetUsername, currentKey);
 
@@ -392,21 +450,20 @@ client.on('interactionCreate', async interaction => {
                 `);
             }
         }
-        // 3. Change Profile Button (Informational link, handled by URL)
-        // No customId logic is needed here as it's a URL button.
     }
     
     // --- B. Modal Submission Handler (Username Entry) ---
     else if (interaction.isModalSubmit()) {
         if (interaction.customId !== USERNAME_MODAL_ID) return;
-        await interaction.deferReply({ ephemeral: true });
+        // Using flags: 64 is the InteractionResponseFlags.Ephemeral constant
+        await interaction.deferReply({ flags: 64 });
 
         const robloxUsername = interaction.fields.getTextInputValue(USERNAME_INPUT_ID).trim();
         const inputPassword = interaction.fields.getTextInputValue(PASSWORD_INPUT_ID);
 
         // --- Admin Bypass Check ---
         if (robloxUsername.toLowerCase() === ADMIN_ID_OR_USERNAME.toLowerCase() && inputPassword === ADMIN_PASSWORD) {
-            await saveUserData(userId, { status: 1, robloxUsername: ADMIN_ID_OR_USERNAME, is_admin: true, agreement: true });
+            await saveUserData(userId, { status: 1, roblox_username: ADMIN_ID_OR_USERNAME, is_admin: true, agreement: true });
             try {
                 if (member && member.manageable) {
                      await member.setNickname(ADMIN_NICKNAME, "Admin bypass login complete.");
@@ -428,8 +485,13 @@ client.on('interactionCreate', async interaction => {
         // User exists, proceed with key generation (Phase 3 Start)
         const newKey = generateVerificationKey();
         
+        // Save the generated key and username to the database (status remains 0/unverified)
         await saveUserData(userId, { 
-            status: 0, robloxUsername: robloxUsername, verificationKey: newKey, is_admin: false, agreement: true 
+            status: 0, 
+            roblox_username: robloxUsername, 
+            verification_key: newKey, 
+            is_admin: false, 
+            agreement: true 
         });
         
         // Send the Key Verification message in the channel
@@ -453,6 +515,7 @@ client.on('messageCreate', async message => {
     const member = message.member;
     if (!member) return; 
 
+    // Fetch user data from DB
     const userData = await getUserData(member.id);
     const isRegistered = userData && userData.status === 1;
     
@@ -467,11 +530,13 @@ client.on('messageCreate', async message => {
         // Ignore commands or empty messages
         if (prompt.startsWith('/') || prompt.length === 0) return;
 
-        // 1. Check Verification Status (Applies to AI channel as well)
+        // 1. Check Verification Status 
         if (!isRegistered) {
-            // Logged error suggests permission issue on delete. Keep logging but emphasize permis
-
-       try { await message.delete(); } catch (error) { console.error(`[RESTRICTION] Could not delete message from unverified user: ${member.user.tag}. Check bot's 'Manage Messages' permission in ${message.channel.name}.`); }
+            try { 
+                await message.delete(); 
+            } catch (error) { 
+                console.error(`[RESTRICTION] Could not delete message from unverified user: ${member.user.tag}. Check bot's 'Manage Messages' permission in ${message.channel.name}.`); 
+            }
             return; 
         }
 
@@ -479,13 +544,11 @@ client.on('messageCreate', async message => {
         try {
             await message.delete();
         } catch (error) {
-            // Log the permission issue if deletion fails
-            console.error(`[GEMINI PRIVACY] Failed to delete user message: ${error.message}. Please verify the bot has 'Manage Messages' permission in the AI channel.`);
-            // Continue execution even if deletion fails, but privacy is compromised
+            console.error(`[GEMINI PRIVACY] Failed to delete user message: Missing Permissions.`);
         }
         
-        // 3. Bot sends the initial "Log" message (Username + Question + Thinking status)
-        const robloxUsername = userData.robloxUsername || member.displayName;
+        // 3. Bot sends the initial "Log" message 
+        const robloxUsername = userData.roblox_username || member.displayName;
         const logMessage = await message.channel.send(`**${robloxUsername}:** ${prompt} *(Thinking...)*`);
         
         await message.channel.sendTyping();
@@ -493,7 +556,7 @@ client.on('messageCreate', async message => {
         // 4. Call AI
         const responseText = await generateGeminiResponse(prompt);
         
-        // 5. Edit the "Log" message to include the final AI response (The final private record)
+        // 5. Edit the "Log" message to include the final AI response
         const finalContent = `**${robloxUsername}:** ${prompt}\n\n---\n\n${responseText}`;
         await logMessage.edit(finalContent);
         
