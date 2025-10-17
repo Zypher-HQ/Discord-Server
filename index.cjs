@@ -504,7 +504,7 @@ client.on('interactionCreate', async interaction => {
 });
 
 
-// --- 10. Event Handling: MESSAGE CREATE (Restriction & Gemini Chat) ---
+// --- 10. Event Handling: MESSAGE CREATE (Restriction & Gemini Chat & Polls) ---
 
 client.on('messageCreate', async message => {
     // Ignore DMs, bots, and messages not from a guild
@@ -527,7 +527,66 @@ client.on('messageCreate', async message => {
         return; // Stop processing - verification channel is fully private
     }
 
-    // --- B. Gemini AI Chat Logic (Runs ONLY in the dedicated AI channel) ---
+    // --- B. Poll Command Handler (Available to all registered users) ---
+    if (message.content.startsWith('!poll')) {
+        // Check if user is registered
+        if (!isRegistered) {
+            try {
+                await message.delete();
+            } catch (error) {
+                console.error(`[POLL] Could not delete message from unverified user.`);
+            }
+            return;
+        }
+
+        const pollContent = message.content.slice(5).trim();
+        
+        if (!pollContent && message.attachments.size === 0) {
+            const warningMsg = await message.reply('⚠️ Please provide a poll question or attach an image!\nUsage: `!poll Your question here` or `!poll` with an attached image.');
+            setTimeout(() => warningMsg.delete().catch(() => {}), 5000);
+            return;
+        }
+
+        const robloxUsername = userData.roblox_username || member.displayName;
+        
+        // Build poll message
+        let pollMessage = `📊 **Poll by ${robloxUsername}**\n\n`;
+        
+        if (pollContent) {
+            pollMessage += `**${pollContent}**\n\n`;
+        }
+        
+        if (message.attachments.size > 0) {
+            pollMessage += `\n`;
+        }
+        
+        pollMessage += `React with:\n👍🏻 = Agree\n👎🏻 = Deny`;
+
+        // Delete the original command message
+        try {
+            await message.delete();
+        } catch (error) {
+            console.error(`[POLL] Could not delete original poll command.`);
+        }
+
+        // Send the poll with attachments if any
+        const pollMsg = await message.channel.send({
+            content: pollMessage,
+            files: Array.from(message.attachments.values())
+        });
+
+        // Add reactions
+        try {
+            await pollMsg.react('👍🏻');
+            await pollMsg.react('👎🏻');
+        } catch (error) {
+            console.error(`[POLL] Could not add reactions to poll.`);
+        }
+
+        return;
+    }
+
+    // --- C. Gemini AI Chat Logic (Runs ONLY in the dedicated AI channel) ---
     if (message.channel.id === GEMINI_CHANNEL_ID) {
         
         const prompt = message.content.trim();
