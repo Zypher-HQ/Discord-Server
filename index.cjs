@@ -74,7 +74,7 @@ async function dbQuery(text, params) {
 async function initializeDataStore() {
     if (!dbPool) return console.error("FATAL: Cannot initialize database. DATABASE_URL is missing.");
 
-    const query = `
+    const userTableQuery = `
         CREATE TABLE IF NOT EXISTS users (
             discord_id VARCHAR(20) PRIMARY KEY,
             status INTEGER DEFAULT 0, -- 0: Unverified, 1: Verified
@@ -84,8 +84,49 @@ async function initializeDataStore() {
             is_admin BOOLEAN DEFAULT FALSE
         );
     `;
+    
+    const ephemeralMessagesQuery = `
+        CREATE TABLE IF NOT EXISTS ephemeral_messages (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(20) NOT NULL,
+            channel_id VARCHAR(20) NOT NULL,
+            message_id VARCHAR(20) NOT NULL,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            expires_at TIMESTAMP NOT NULL
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_ephemeral_expires ON ephemeral_messages(expires_at);
+    `;
+    
+    const result1 = await dbQuery(userTableQuery);
+    const result2 = await dbQuery(ephemeralMessagesQuery);
+    
+    if (result1) console.log("✅ [DB] User data table initialized successfully.");
+    if (result2) console.log("✅ [DB] Ephemeral messages table initialized successfully.");
+    
+    // Start cleanup task for expired messages
+    setInterval(cleanupExpiredMessages, 60000); // Run every minute
+}
+
+/** Cleans up expired ephemeral messages from database */
+async function cleanupExpiredMessages() {
+    const query = 'DELETE FROM ephemeral_messages WHERE expires_at < NOW()';
     const result = await dbQuery(query);
-    if (result) console.log("✅ [DB] User data table initialized successfully.");
+    if (result && result.rowCount > 0) {
+        console.log(`🗑️ [DB] Cleaned up ${result.rowCount} expired ephemeral message(s)`);
+    }
+}
+
+/** Stores an ephemeral message in the database */
+async function storeEphemeralMessage(userId, channelId, messageId, question, answer) {
+    const expiresAt = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes from now
+    const query = `
+        INSERT INTO ephemeral_messages (user_id, channel_id, message_id, question, answer, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+    `;
+    await dbQuery(query, [userId, channelId, messageId, question, answer, expiresAt]);
 }
 
 /** Retrieves user data from the database. */
@@ -375,8 +416,21 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: "✅ You are already registered and verified!", ephemeral: true });
     }
 
-    // --- A. Button Handlers (AGREE & REGISTER) ---
+    // --- A. Button Handlers (AGREE & REGISTER & DISMISS) ---
     if (interaction.isButton()) {
+        // Handle Gemini message dismissal
+        if (interaction.customId?.startsWith('dismiss_gemini_')) {
+            const messageId = interaction.customId.split('_')[2];
+            
+            try {
+                await interaction.message.delete();
+                console.log(`🗑️ [GEMINI] User dismissed ephemeral message ${messageId}`);
+            } catch (error) {
+                console.error(`[GEMINI] Could not delete dismissed message: ${error.message}`);
+            }
+            return;
+        }
+        
         if (interaction.channelId !== VERIFICATION_CHANNEL_ID) return;
         
         // 1. Agree Button Click
@@ -642,50 +696,53 @@ client.on('messageCreate', async message => {
             console.error(`[GEMINI PRIVACY] Failed to delete user message: Missing Permissions.`);
         }
         
-        // 3. Try to send DM to user
-        try {
-            const robloxUsername = userData.roblox_username || member.displayName;
-            
-            // Send initial "Thinking..." DM
-            const dmChannel = await message.author.createDM();
-            const thinkingMsg = await dmChannel.send(`🤖 **Gemini AI is thinking...**\n\n**Your question:** ${prompt}\n\n*Generating response...*`);
-            
-            // 4. Call AI
-            const responseText = await generateGeminiResponse(prompt);
-            
-            // 5. Edit DM with final response
-            await thinkingMsg.edit(`🤖 **Gemini AI Response**\n\n**Your question:** ${prompt}\n\n**Answer:**\n${responseText}`);
-            
-        } catch (dmError) {
-            // DMs are disabled - send warning in channel with instructions
-            const enableDMButton = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setLabel('📖 How to Enable DMs')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL('https://support.discord.com/hc/en-us/articles/217916488-Blocking-Privacy-Settings')
-            );
-            
-            const warningMsg = await message.channel.send({
-                content: `${message.author} ⚠️ **I cannot send you a DM!**\n\n` +
-                         `To use Gemini AI, you need to enable Direct Messages from server members.\n\n` +
-                         `**How to enable:**\n` +
-                         `1. Right-click this server name\n` +
-                         `2. Select "Privacy Settings"\n` +
-                         `3. Toggle ON "Direct Messages"\n` +
-                         `4. Try your question again!\n\n` +
-                         `Click the button below for detailed instructions.`,
-                components: [enableDMButton]
-            });
-            
-            // Delete warning after 30 seconds
-            setTimeout(async () => {
-                try {
-                    await warningMsg.delete();
-                } catch (e) {
-                    // Ignore if already deleted
-                }
-            }, 30000);
-        }
+        const robloxUsername = userData.roblox_username || member.displayName;
+        
+        // 3. Send ephemeral-style message (only visible to user)
+        const thinkingMsg = await message.channel.send({
+            content: `🤖 **Gemini AI is thinking...** (Only you can see this)\n\n**${robloxUsername} asked:** ${prompt}\n\n*Generating response...*`,
+            allowedMentions: { users: [message.author.id] }
+        });
+        
+        await message.channel.sendTyping();
+        
+        // 4. Call AI
+        const responseText = await generateGeminiResponse(prompt);
+        
+        // 5. Update message with final response
+        const dismissButton = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`dismiss_gemini_${thinkingMsg.id}`)
+                .setLabel('🗑️ Dismiss')
+                .setStyle(ButtonStyle.Secondary)
+        );
+        
+        await thinkingMsg.edit({
+            content: `🤖 **Gemini AI Response** (Only you can see this - Auto-deletes in 20 minutes)\n\n` +
+                     `**${robloxUsername} asked:** ${prompt}\n\n` +
+                     `**Answer:**\n${responseText}\n\n` +
+                     `*This message will be automatically removed from the database in 20 minutes.*`,
+            components: [dismissButton]
+        });
+        
+        // 6. Store in database with 20-minute expiration
+        await storeEphemeralMessage(
+            message.author.id,
+            message.channel.id,
+            thinkingMsg.id,
+            prompt,
+            responseText
+        );
+        
+        // 7. Schedule message deletion after 20 minutes
+        setTimeout(async () => {
+            try {
+                await thinkingMsg.delete();
+                console.log(`🗑️ [GEMINI] Auto-deleted ephemeral message ${thinkingMsg.id}`);
+            } catch (e) {
+                // Message may already be dismissed/deleted
+            }
+        }, 20 * 60 * 1000); // 20 minutes
         
         return; 
     }
