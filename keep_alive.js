@@ -1,119 +1,94 @@
-// 
-// --- EXPRESS KEEP-ALIVE SERVER (v2.2) ---
-// 
-// Summary: Sets up a simple Express server to keep the Node process running.
-// It features clean routing for /dashboard and /donation (no .html extension), 
-// and a secure geolocation check endpoint. The /logs endpoint is public.
-// 
-
+// --- REQUIRED MODULES ---
 const express = require('express');
-const app = express();
-const path = require('path');
 const fs = require('fs');
-const axios = require('axios'); // For external API calls (Geolocation)
+const path = require('path');
 
-// --- Configuration ---
-const PORT = process.env.PORT || 3000;
-const LOG_FILE_PATH = path.join(__dirname, 'bot.log');
-const DASHBOARD_FILE_PATH = path.join(__dirname, 'dashboard.html');
-// Correct file path for the donation page: donation.htm
-const DONATION_FILE_PATH = path.join(__dirname, 'donation.htm'); 
-const ICON_PATH = path.join(__dirname, 'Discord-Server', 'data', 'logo_icon.png');
-// ADMIN_API_KEY is kept for future use but not used for logs
+// --- CONFIGURATION ---
+// Port for the web server (Standard for hosting services like Render/Replit)
+const PORT = 3000; 
 
-// --- Route Definitions ---
+// Log file path, matching the setup in index.cjs
+const LOG_FILE_PATH = path.join(__dirname, 'bot.log'); 
 
-// 1. Root Route: Redirection to /dashboard (Ensures clean URL start)
-app.get('/', (req, res) => {
-    // User goes to https://my_website.onrender.com and gets redirected to /dashboard
-    res.redirect('/dashboard'); 
-});
+// Directory for serving HTML dashboard and donation pages
+const STATIC_DIR = path.join(__dirname, 'public'); 
 
-// 2. Dashboard Route (Serves dashboard.html without the .html extension)
-app.get('/dashboard', (req, res) => {
-    res.sendFile(DASHBOARD_FILE_PATH);
-});
+// Initialize the Express application
+const app = express();
 
-// 3. Donation Route (Serves donation.htm without the .html extension)
-app.get('/donation', (req, res) => {
-    res.sendFile(DONATION_FILE_PATH);
-});
-
-// 4. Health Check/Status Route
-app.get('/status', (req, res) => {
-    const status = {
-        status: 'UP',
-        uptime_seconds: process.uptime(),
-        memory_usage_mb: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
-        message: 'Bot is currently running and processing events.'
-    };
-    res.json(status);
-});
-
-// 5. Log Viewer Route (NOW PUBLIC - No API Key Check)
-app.get('/logs', (req, res) => {
-    fs.readFile(LOG_FILE_PATH, 'utf8', (err, data) => {
-        if (err) {
-            console.error('Error reading log file:', err.message);
-            // Return an empty array if the log file doesn't exist yet
-            return res.json({ logs: ['{"timestamp":"'+new Date().toISOString()+'","level":"ERROR","source":"SYSTEM","message":"Log file not found. Bot might not have started yet."}'] });
-        }
-        const logLines = data.split('\n').filter(line => line.trim() !== '');
-        res.json({ logs: logLines.reverse() }); 
-    });
-});
-
-// 6. Geolocation Check Endpoint (COMPLEXITY ADDED HERE)
-app.get('/check-location', async (req, res) => {
-    // Get the user's IP address from common proxy headers (like Render uses) or the socket.
-    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket.remoteAddress;
-
-    try {
-        // Use ip-api.com to get location data
-        const geoResponse = await axios.get(`http://ip-api.com/json/${ip}?fields=status,country,countryCode`);
-        
-        if (geoResponse.data.status !== 'success') {
-            return res.json({ allowed: false, country: 'UNKNOWN', message: 'Geolocation service failed or IP is reserved/invalid.' });
-        }
-
-        const countryCode = geoResponse.data.countryCode;
-        const countryName = geoResponse.data.country;
-        const isPhilippines = countryCode === 'PH'; // PH is the country code for Philippines
-
-        res.json({ 
-            allowed: isPhilippines, 
-            countryCode: countryCode,
-            countryName: countryName,
-            message: isPhilippines ? 'Access granted.' : `Donation restricted to the Philippines (Detected: ${countryName}).`
-        });
-
-    } catch (error) {
-        console.error('GEOLOCATION API ERROR:', error.message);
-        // Fail safe: If external API fails, restrict access by default for security.
-        res.status(200).json({ allowed: false, countryCode: 'API_ERROR', countryName: 'API_ERROR', message: 'Internal server error during location check. Access denied by default.' });
-    }
-});
-
-// 7. Favicon Route (Directly serves the logo)
-app.get('/favicon.ico', (req, res) => {
-    // Check if the icon exists at the specified path
-    if (fs.existsSync(ICON_PATH)) {
-        res.sendFile(ICON_PATH);
-    } else {
-        // Fallback with a 204 No Content if the icon file cannot be found
-        res.status(204).end();
-    }
-});
-
-
-// --- Server Startup Function ---
+/**
+ * Starts the Express web server responsible for uptime pings and the dashboard.
+ * This function should be called once in your main bot file (e.g., index.cjs).
+ */
 function keepAlive() {
-    app.listen(PORT, () => {
-        console.log(`🟢 Keep-Alive Server online and listening on port ${PORT}`);
-        console.log(`🌐 Clean URLs: /dashboard and /donation are active.`);
+    // 1. Serve Static Files
+    // Middleware to serve all files from the 'public' directory.
+    // This allows access to /dashboard.html, /donation/index.html, etc.
+    app.use(express.static(STATIC_DIR));
+
+    // 2. Root Endpoint
+    // Redirects the base URL to the main dashboard page for convenience.
+    app.get('/', (req, res) => {
+        // Ensure this points to the correct entry HTML file
+        res.sendFile(path.join(STATIC_DIR, 'dashboard.html'));
+    });
+
+    // 3. API Endpoint for Bot Console Logs
+    // This is called by the dashboard's JavaScript to fetch live logs.
+    app.get('/api/logs', (req, res) => {
+        // Asynchronously read the log file to prevent blocking the event loop
+        fs.readFile(LOG_FILE_PATH, 'utf8', (err, data) => {
+            if (err) {
+                // Handle case where the log file doesn't exist (critical error)
+                if (err.code === 'ENOENT') {
+                    console.error("[KEEP_ALIVE] CRITICAL: Log file not found at:", LOG_FILE_PATH);
+                    return res.status(200).json({ 
+                        status: 'ERROR', 
+                        logs: [
+                            `[CRITICAL] Log file (bot.log) not found. Path: ${LOG_FILE_PATH}`
+                        ] 
+                    });
+                }
+                
+                // Handle general file reading errors
+                console.error("[KEEP_ALIVE] Error reading log file:", err.message);
+                return res.status(500).json({ 
+                    status: 'ERROR', 
+                    logs: [
+                        `[ERROR] Server failed to read logs: ${err.message}`
+                    ] 
+                });
+            }
+            
+            // Split the file content into an array of log lines
+            const logsArray = data.split('\n').filter(line => line.trim() !== '');
+
+            // Return the processed logs as JSON
+            res.json({
+                status: 'OK',
+                logs: logsArray
+            });
+        });
+    });
+
+    // 4. Server Start
+    const server = app.listen(PORT, () => {
+        console.log(`[KEEP_ALIVE] Web server operational on port ${PORT}`);
+    });
+
+    // 5. Robust Server Error Handling
+    server.on('error', (e) => {
+        if (e.code === 'EADDRINUSE') {
+            console.error(`[CRITICAL] Port ${PORT} is already in use. Cannot start web server. Is another process running?`);
+        } else {
+            console.error(`[CRITICAL] Web server failed with unhandled error: ${e.message}`);
+        }
+        // Exit the process if the server cannot start, as keep-alive functionality is broken.
+        process.exit(1);
     });
 }
 
-// Export the startup function
+// Export the function so it can be required and executed by index.cjs
 module.exports = keepAlive;
 
+                
