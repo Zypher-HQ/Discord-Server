@@ -3,478 +3,462 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Server Bot Dashboard</title>
-    <!-- Load Tailwind CSS -->
+    <title>Bot Status Dashboard - System Interface V4.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Chart.js for Metrics Graphs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cutive+Mono&display=swap" rel="stylesheet">
+
     <style>
-        /* Base Styling */
+        /* Define the professional Cyber-Console look */
+        :root {
+            --color-primary: #00ffff; /* Neon Cyan */
+            --color-secondary: #ff00ff; /* Magenta/Fuchsia */
+            --color-background: #000000; /* Absolute Black */
+            --color-card-bg: rgba(0, 30, 30, 0.1); /* Subtle transparent dark cyan */
+            --color-border: rgba(0, 255, 255, 0.3);
+            --shadow-glow: 0 0 8px rgba(0, 255, 255, 0.5);
+            --shadow-intense: 0 0 15px rgba(0, 255, 255, 0.7);
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6; /* Light Gray Background */
-            color: #1f2937;
-        }
-        .dashboard-card {
-            background-color: #ffffff; 
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease-out;
-            border-radius: 1.5rem; /* Rounded 3xl */
-        }
-        
-        /* Action Button Styling */
-        .action-btn {
-            @apply flex items-center justify-center w-full py-3 px-4 text-white font-bold rounded-xl shadow-lg transition duration-200 transform hover:scale-[1.02] hover:shadow-xl;
+            font-family: 'Cutive Mono', monospace;
+            background-color: var(--color-background);
+            color: var(--color-primary);
+            min-height: 100vh;
+            text-shadow: 0 0 2px rgba(0, 255, 255, 0.2);
         }
 
-        /* Log Viewer - CRITICAL MOBILE FIX */
+        /* --- UI Components --- */
+        .card {
+            background-color: var(--color-card-bg);
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-glow);
+            transition: all 0.3s ease-in-out;
+            padding: 1.5rem; /* Increased padding */
+        }
+        .card:hover {
+            border-color: var(--color-primary);
+            box-shadow: var(--shadow-intense);
+            transform: scale(1.01);
+        }
+
+        /* Metrics */
+        .metric-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            text-shadow: var(--shadow-glow);
+        }
+
+        /* Log Container */
         .log-container {
-            height: 400px; /* Fixed height to prevent stretching */
+            background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+            border: 2px solid var(--color-border);
+            box-shadow: var(--shadow-glow);
+            height: 70vh;
+            max-height: 70vh;
             overflow-y: scroll;
-            overscroll-behavior-y: contain;
-            min-height: 200px;
-            transition: height 0.5s ease-in-out;
-        }
-        
-        /* Full Screen Overlay */
-        .fullscreen-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.95); /* Semi-transparent black */
-            z-index: 1000;
-            display: none; 
-            flex-direction: column;
             padding: 1rem;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            /* Scrollbar styling for a cleaner look */
+            scrollbar-color: var(--color-primary) var(--color-background);
+            scrollbar-width: thin;
         }
-        .fullscreen-overlay.active {
+        .log-container::-webkit-scrollbar { width: 5px; }
+        .log-container::-webkit-scrollbar-thumb { background: var(--color-primary); border-radius: 5px; }
+        .log-container::-webkit-scrollbar-track { background: var(--color-background); }
+
+        .log-line {
+            line-height: 1.6;
             display: flex;
-            opacity: 1;
+            align-items: flex-start;
         }
 
-        /* Log Entry Styling */
-        .log-entry {
-            white-space: pre-wrap;
-            word-break: break-all;
-            line-height: 1.4;
+        /* Log Formatting - High Contrast */
+        .log-timestamp {
+            color: var(--color-secondary); /* Magenta for distinction */
+            margin-right: 1rem;
+            flex-shrink: 0;
         }
-        .text-error { color: #f87171; /* Red 400 */ }
-        .text-restriction { color: #a78bfa; /* Violet 400 */ }
-        .text-critical { color: #fca5a5; /* Red 300, lighter for CRITICAL */ }
+        .log-module {
+            color: var(--color-primary);
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+            font-weight: 700;
+        }
+        .LEVEL_DEBUG { color: #81e6d9; } /* Subtle Cyan */
+        .LEVEL_INFO { color: var(--color-primary); } /* Neon Cyan */
+        .LEVEL_WARN { color: #f6e05e; } /* Yellow */
+        .LEVEL_ERROR { color: #ff6666; font-weight: 700; } /* Light Red */
+        .LEVEL_CRITICAL { color: #ff0000; background-color: rgba(255, 0, 0, 0.1); font-weight: 700; }
+
+        /* Buttons */
+        .btn-action {
+            border: 1px solid var(--color-primary);
+            box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+            background-color: rgba(0, 255, 255, 0.1);
+            color: var(--color-primary);
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-action:hover:not(:disabled) {
+            background-color: rgba(0, 255, 255, 0.3);
+            box-shadow: var(--shadow-intense);
+            transform: translateY(-2px);
+        }
+        
+        .btn-support {
+             background-color: var(--color-secondary);
+             border: 1px solid var(--color-secondary);
+             color: var(--color-background);
+             font-weight: 700;
+             box-shadow: 0 0 8px rgba(255, 0, 255, 0.6);
+        }
+        .btn-support:hover {
+            background-color: #ff33ff;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.9);
+        }
+
     </style>
 </head>
-<body class="min-h-screen p-4 sm:p-8">
+<body class="p-4 sm:p-6 lg:p-10">
 
-    <div class="max-w-xl mx-auto">
-        
-        <!-- === 1. PROFILE HEADER CARD === -->
-        <div class="w-full mx-auto dashboard-card border border-gray-200 mb-6">
-            
-            <div class="p-6 pt-10 text-center relative bg-indigo-600 bg-opacity-90 border-b border-indigo-700 rounded-t-3xl">
-                
-                <img src="/server-logo.png" alt="Server Logo" 
-                    class="w-20 h-20 rounded-full object-cover mx-auto -mt-10 mb-4 border-4 border-white shadow-xl" 
-                    onerror="this.onerror=null;this.src='https://placehold.co/80x80/ffffff/4f46e5?text=A4';">
-                
-                <h1 class="text-2xl font-extrabold text-white">Agent#4555 Bot</h1>
-                <p class="text-sm text-indigo-100 opacity-80">Operational Hub</p>
-            </div>
+    <header class="mb-10 border-b border-dashed border-cyan-700 pb-4">
+        <h1 class="text-3xl font-bold text-white flex items-center">
+            <span class="text-secondary mr-4">[[_INIT_]]</span> System Monitoring Interface (S.M.I.)
+        </h1>
+        <p class="text-sm text-gray-400 mt-2 ml-14">ACCESS LEVEL: ADMINISTRATOR // NODE: LIVE-FEED-01</p>
+    </header>
 
-            <!-- Current Metrics & Status (STABLE STATE DRIVEN) -->
-            <div class="p-6 grid grid-cols-3 gap-4 border-b border-gray-200">
-                
-                <!-- Status Card -->
-                <div class="p-2 rounded-lg bg-indigo-50 text-center shadow-inner border border-indigo-100 transition duration-300 hover:shadow-lg">
-                    <p class="text-xs font-medium text-indigo-700">Status</p>
-                    <p id="bot-status-text" class="text-base font-bold mt-1 text-green-700">UP</p>
-                </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
 
-                <!-- Uptime Card -->
-                <div class="p-2 rounded-lg bg-indigo-50 text-center shadow-inner border border-indigo-100 transition duration-300 hover:shadow-lg">
-                    <p class="text-xs font-medium text-indigo-700">Uptime</p>
-                    <p id="uptime-text" class="text-base font-bold mt-1 text-indigo-700">--</p>
-                </div>
-                
-                <!-- Memory Card (DB Calculated) -->
-                <div class="p-2 rounded-lg bg-indigo-50 text-center shadow-inner border border-indigo-100 transition duration-300 hover:shadow-lg">
-                    <p class="text-xs font-medium text-indigo-700">Current Memory</p>
-                    <p id="memory-text" class="text-base font-bold mt-1 text-green-700">--</p>
-                </div>
-
-            </div>
-            
-            <!-- Latency Card (LIVE MEASUREMENT) -->
-            <div class="p-3 text-center border-t border-gray-200">
-                <p class="text-xs font-medium text-indigo-700">Live Latency (Ms)</p>
-                <p id="latency-text" class="text-lg font-extrabold text-yellow-600">-- ms</p>
-            </div>
-
-            <!-- Footer / Credits -->
-            <div class="p-3 text-center text-xs text-gray-500 border-t border-gray-200 bg-gray-50 rounded-b-3xl">
-                Deployed via Render. <span class="font-bold">Last Check: <span id="last-checked">...</span></span>
-            </div>
-        </div>
-        
-        <!-- === 2. QUICK ACTIONS CARD (NEW) === -->
-        <div class="dashboard-card p-4 border border-gray-200 mb-6">
-            <h2 class="text-lg font-bold text-gray-700 mb-4 border-b border-gray-200 pb-2">Quick Actions</h2>
-            <div class="grid grid-cols-2 gap-4">
-                
-                <!-- Donation Button -->
-                <a href="/donation" class="action-btn bg-yellow-500 hover:bg-yellow-600 shadow-yellow-400/50">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8c-1.11 0-2.08-.402-2.599-1M12 21c.552 0 1-.448 1-1v-2.382l5.772-2.22c.813-.311 1.636-.61 2.383-1.045.474-.27.848-.71.996-1.242.148-.532.062-1.107-.22-1.603-.282-.496-.704-.925-1.242-1.195-.538-.27-1.113-.356-1.609-.208-1.503.456-3.033.725-4.577.808V3c0-.552-.448-1-1-1s-1 .448-1 1v2.382l-5.772 2.22c-.813.311-1.636.61-2.383 1.045-.474.27-.848.71-.996 1.242-.148.532-.062 1.107.22 1.603.282.496.704.925 1.242 1.195.538.27 1.113.356 1.609.208 1.503-.456 3.033-.725 4.577-.808V20c0 .552.448 1 1 1z"></path></svg>
-                    Support (Donation)
-                </a>
-                
-                <!-- Join Discord Button -->
-                <a href="https://discord.gg/FVnw46BEY" target="_blank" class="action-btn bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/50">
-                    <!-- Inline SVG for the Discord Icon -->
-                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M22 6.906a14.288 14.288 0 00-3.864-2.223 15.394 15.394 0 00-4.14 0c-.822-1.25-1.996-2.247-3.23-2.614a1.83 1.83 0 00-2.43 1.25 10.875 10.875 0 00-.012 2.217C4.698 5.433 2.76 6.55 2 9.47v.03a11.13 11.13 0 00.99 4.34c.73 1.766 2.05 3.125 3.65 4.093A17.168 17.168 0 009.617 19c.144.1.28.182.404.25.122.068.25.13.38.188.13.058.26.11.394.156.134.045.27.086.4.12.13.033.264.06.4.08.13.02.26.04.394.04.134 0 .264-.02.394-.04.13-.02.264-.047.4-.08.13-.034.27-.075.4-.12.13-.046.257-.098.38-.156.124-.068.26-.15.404-.25a17.168 17.168 0 003.027-1.127 10.42 10.42 0 003.65-4.093v-.03c-.76-2.92-2.7-4.037-7.994-4.238a8.87 8.87 0 00-.01-1.21c0-.496.06-.99.18-1.467.24-1.026.83-1.895 1.76-2.476a3.83 3.83 0 011.05.29c.19.097.37.21.53.336.16.126.31.268.45.424a.89.89 0 001.21-.01.9.9 0 00-.01-1.21 6.5 6.5 0 00-.47-.426c-.16-.126-.35-.25-.57-.376a4.83 4.83 0 00-1.41-.444c-1.3-.11-2.58.27-3.5 1.05-1.14.97-1.68 2.2-1.68 3.5v.02c.01.49-.03.98-.12 1.45-.16.89-.57 1.67-1.17 2.37-1.17 1.3-2.7 2.06-4.5 2.25a.89.89 0 00-.11.01.9.9 0 00-.01.01zM8 15c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm8 0c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-                    Join Discord
-                </a>
-            </div>
+        <div class="card rounded-lg">
+            <p class="metric-label">SYSTEM STATE</p>
+            <p id="status-text" class="metric-value text-green-400">ONLINE</p>
         </div>
 
-        <!-- === 3. METRICS GRAPHS SECTION (CALCULATED) === -->
-        <div class="dashboard-card p-4 shadow-2xl border border-gray-200 mb-6">
-            <h2 class="text-xl font-bold text-indigo-700 mb-4 border-b border-gray-300 pb-2">Calculated Operational Metrics</h2>
-
-            <div class="space-y-6">
-                
-                <!-- Memory Usage Chart (Simulated Historical Fluctuation) -->
-                <div class="bg-gray-100 p-4 rounded-xl shadow-inner">
-                    <h3 class="text-lg font-semibold text-green-700 mb-2">Historical Memory Usage (MB)</h3>
-                    <div class="h-48">
-                        <canvas id="memoryChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Latency Chart (Lag Spikes) -->
-                <div class="bg-gray-100 p-4 rounded-xl shadow-inner">
-                    <h3 class="text-lg font-semibold text-indigo-700 mb-2">Historical Bot Latency (ms)</h3>
-                    <div class="h-48">
-                        <canvas id="latencyChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Daily Error Count Chart (LOG PARSING) -->
-                <div class="bg-gray-100 p-4 rounded-xl shadow-inner">
-                    <h3 class="text-lg font-semibold text-red-700 mb-2">Log-Parsed Error Count (Today)</h3>
-                    <div class="h-48">
-                        <canvas id="errorChart"></canvas>
-                    </div>
-                </div>
-            </div>
+        <div class="card rounded-lg">
+            <p class="metric-label">UPTIME (H:M:S)</p>
+            <p id="uptime-text" class="metric-value text-yellow-500">--</p>
         </div>
 
-        <!-- === 4. LOG VIEWER SECTION === -->
-        <div class="dashboard-card p-4 shadow-2xl border border-gray-200">
-             <h2 class="text-lg font-semibold text-indigo-700 mb-3 flex justify-between items-center">
-                Bot Console Logs
-                <div class="flex space-x-2 items-center">
-                    <span id="log-count" class="text-sm font-medium text-gray-500">0 entries</span>
-                    
-                    <!-- Scale Button -->
-                    <button id="scale-log-button" title="View Logs Full Screen" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold p-2 rounded-lg shadow-md transition duration-150 transform hover:scale-110 disabled:bg-indigo-400">
-                        <!-- Maximize Icon (custom SVG) -->
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0 0h-4m4 0l-5-5m0 16v-4m0 4h4m0-4l-5 5m-5-5v4m0-4H4m0 4l5-5"></path></svg>
-                    </button>
-                    
-                    <button id="refresh-button" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-1 px-3 rounded-lg shadow-md transition duration-150 transform hover:scale-105 disabled:bg-indigo-400">
-                        Refresh
-                    </button>
-                </div>
-            </h2>
-            <!-- Log Viewer Container with fixed height and internal scroll -->
-            <div id="log-viewer" class="log-container bg-gray-900 p-3 rounded-xl shadow-inner text-xs space-y-1 font-mono text-white">
-                <p class="text-gray-500 animate-pulse">Connecting to live console...</p>
-            </div>
+        <div class="card rounded-lg">
+            <p class="metric-label">DB MEMORY (MB)</p>
+            <p id="memory-text" class="metric-value text-cyan-400">--</p>
         </div>
-        
+
+        <div class="card rounded-lg">
+            <p class="metric-label">NETWORK RTT (MS)</p>
+            <p id="latency-text" class="metric-value text-red-400">--</p>
+        </div>
     </div>
 
-    <!-- === FULL SCREEN LOG OVERLAY === -->
-    <div id="fullscreen-log" class="fullscreen-overlay">
-        <header class="flex justify-between items-center text-white pb-4 mb-4 border-b border-gray-700">
-            <h2 class="text-2xl font-bold">Full Console Log View</h2>
-            <button id="close-log-button" class="p-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition duration-200">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    <div class="mb-10 p-6 card rounded-lg">
+        <h2 class="text-xl font-bold text-white mb-4 border-b border-cyan-800 pb-2">OPERATIONAL COMMANDS</h2>
+        <div class="flex flex-col sm:flex-row gap-4">
+            <a href="https://discord.gg/yourinvite" target="_blank" class="btn-action flex-1 text-white py-3 rounded-lg text-center font-bold hover:text-black hover:bg-cyan-300 transition duration-200">
+                INITIATE DISCORD LINK
+            </a>
+            <a href="/donation" class="btn-support flex-1 py-3 rounded-lg text-center transition duration-200">
+                SECURE CONTRIBUTION (G-PAY)
+            </a>
+        </div>
+    </div>
+
+    <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+        <h2 class="text-xl font-bold text-white mb-3 sm:mb-0">LIVE CONSOLE LOGS</h2>
+        <div class="flex items-center space-x-3">
+            <button id="refresh-button" class="btn-action text-white text-xs font-bold py-2 px-4 rounded-full transition duration-200">
+                MANUAL REFRESH
             </button>
-        </header>
-        <div id="fullscreen-log-content" class="flex-1 overflow-y-scroll space-y-1 font-mono text-sm mt-4 log-container">
-            <!-- Content will be mirrored here -->
+            <button id="scale-button" class="btn-action text-white text-xs font-bold w-10 h-10 flex items-center justify-center rounded-full" title="View Full Screen Log">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0 0h-4m4-4l-5 5m-5 0l-5 5m0 0h4m-4 0v-4m11 4l-5-5m5 5v-4m0 4h-4"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <div id="log-output" class="log-container rounded-lg">
+        <div class="text-secondary text-sm">LOADING LOGSTREAM...</div>
+    </div>
+
+    <div id="modal-log-viewer" class="fixed inset-0 bg-black bg-opacity-95 z-50 hidden p-4 sm:p-10">
+        <div class="h-full w-full flex flex-col">
+            <div class="flex justify-between items-center pb-4 border-b-2 border-cyan-700">
+                <h2 class="text-2xl text-white font-bold">FULL CONSOLE LOG VIEW (INSPECT MODE)</h2>
+                <button id="close-modal-button" class="text-gray-400 hover:text-red-500 transition duration-200">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="modal-log-content" class="flex-grow log-container !h-auto !max-h-full mt-4 rounded-lg">
+                </div>
         </div>
     </div>
 
 
     <script>
-        (function() {
-            const statusText = document.getElementById('bot-status-text');
-            const uptimeText = document.getElementById('uptime-text');
-            const memoryText = document.getElementById('memory-text');
-            const latencyText = document.getElementById('latency-text');
-            const lastChecked = document.getElementById('last-checked');
-            const logViewer = document.getElementById('log-viewer');
-            const logCount = document.getElementById('log-count');
-            const refreshButton = document.getElementById('refresh-button');
-            const scaleLogButton = document.getElementById('scale-log-button');
-            const closeLogButton = document.getElementById('close-log-button');
-            const fullscreenLog = document.getElementById('fullscreen-log');
-            const fullscreenLogContent = document.getElementById('fullscreen-log-content');
-            
-            let memoryChartInstance, latencyChartInstance, errorChartInstance;
-            let currentLogs = []; 
-            
-            // Stable state for current metrics
-            let dashboardState = { 
-                status: 'UP',
-                uptime_seconds: 245000, // Stable starting value
-                memory_usage_mb: 585,  // Stable DB usage based memory
-                historical_latency: [],
-                historical_errors: [],
-                historical_memory: []
+        // --- DOM Elements ---
+        const logOutput = document.getElementById('log-output');
+        const refreshButton = document.getElementById('refresh-button');
+        const scaleButton = document.getElementById('scale-button');
+        const modalViewer = document.getElementById('modal-log-viewer');
+        const closeModalButton = document.getElementById('close-modal-button');
+        const modalLogContent = document.getElementById('modal-log-content');
+
+        const statusText = document.getElementById('status-text');
+        const uptimeText = document.getElementById('uptime-text');
+        const memoryText = document.getElementById('memory-text');
+        const latencyText = document.getElementById('latency-text');
+
+        // --- State Management ---
+        const REFRESH_INTERVAL_MS = 3000; // Increased speed for 'live' feel
+        let isFetching = false;
+
+        // Persistent State (Simulated)
+        let systemState = {
+            uptimeSeconds: 154320, // ~1.7 days
+            dbMemoryMB: 420.55,
+            status: 'ONLINE',
+            totalLogs: [],
+            logCounter: 0
+        };
+
+        // --- Utility Functions ---
+
+        /**
+         * Formats seconds into HH:MM:SS.
+         */
+        function formatUptime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        /**
+         * Generates a single, structured, mock log entry for professional logs.
+         */
+        function generateMockLog() {
+            const levels = ['DEBUG', 'INFO', 'INFO', 'WARN', 'ERROR', 'CRITICAL'];
+            const modules = ['CLIENT:DISCORD', 'SVC:API_GATE', 'DB:MONGO_C', 'SCHD:WORKER', 'CACH:REDIS_P'];
+            const level = levels[Math.floor(Math.random() * levels.length)];
+            const module = modules[Math.floor(Math.random() * modules.length)];
+
+            let message;
+
+            switch (level) {
+                case 'CRITICAL':
+                    message = `[SYSTEM FAILURE] Unhandled exception in ${module}. Automatic rollback initiated.`;
+                    break;
+                case 'ERROR':
+                    message = `Request ID ${Math.random().toString(36).substring(2, 8)} failed. Status Code: 503. Retrying...`;
+                    break;
+                case 'WARN':
+                    message = `High utilization warning on ${module}. Memory spike detected (${systemState.dbMemoryMB.toFixed(2)}MB).`;
+                    break;
+                case 'INFO':
+                    message = `${module}: successfully executed command. User count: ${Math.floor(Math.random() * 500) + 100}.`;
+                    break;
+                case 'DEBUG':
+                default:
+                    message = `Internal processing tick completed in 0.${Math.floor(Math.random() * 99)}ms.`;
+                    break;
+            }
+
+            const now = new Date();
+            const timestamp = now.toTimeString().split(' ')[0] + '.' + now.getMilliseconds().toString().padStart(3, '0');
+
+            return { timestamp, level, module, message };
+        }
+
+        /**
+         * Mocks the backend API call to fetch updated metrics and a batch of new logs.
+         */
+        async function mockFetchData() {
+            // Simulate network latency (40ms to 150ms for realism)
+            const simulatedLatency = Math.floor(Math.random() * 110) + 40;
+            await new Promise(resolve => setTimeout(resolve, simulatedLatency));
+
+            // 1. Simulate Metrics Update
+            systemState.uptimeSeconds += (REFRESH_INTERVAL_MS / 1000);
+            systemState.dbMemoryMB += (Math.random() - 0.5) * 0.3; // Fluctuate up to 0.15 MB
+            if (systemState.dbMemoryMB < 350) systemState.dbMemoryMB = 350;
+
+            // 2. Simulate Log Generation (1 to 4 new logs per fetch)
+            const numLogs = Math.floor(Math.random() * 4) + 1;
+            const newLogs = [];
+            for (let i = 0; i < numLogs; i++) {
+                systemState.logCounter++;
+                const log = generateMockLog();
+                log.id = systemState.logCounter;
+                newLogs.push(log);
+            }
+
+            systemState.totalLogs = systemState.totalLogs.concat(newLogs);
+
+            // Limit total logs shown in the console to prevent performance issues
+            const maxLogs = 500;
+            if (systemState.totalLogs.length > maxLogs) {
+                systemState.totalLogs = systemState.totalLogs.slice(systemState.totalLogs.length - maxLogs);
+            }
+
+            return {
+                status: 'OK',
+                metrics: {
+                    status: systemState.status,
+                    uptime: systemState.uptimeSeconds,
+                    memory: systemState.dbMemoryMB,
+                    latency: simulatedLatency
+                },
+                newLogs: newLogs,
+                totalLogs: systemState.totalLogs
             };
+        }
 
-            // --- Utility Functions ---
-            function formatUptime(seconds) {
-                const d = Math.floor(seconds / (3600 * 24));
-                const h = Math.floor((seconds % (3600 * 24)) / 3600);
-                const m = Math.floor((seconds % 3600) / 60);
-                const s = Math.floor(seconds % 60);
-                if (d > 0) return `${d}d ${h}h`;
-                return `${h}h ${m}m ${s}s`;
-            }
+        /**
+         * Cleans, colors, and formats a structured log object into styled HTML.
+         */
+        function formatLogLine(logEntry) {
+            const lineElement = document.createElement('div');
+            lineElement.classList.add('log-line');
 
-            function getRandomInt(min, max) {
-                return Math.floor(Math.random() * (max - min + 1)) + min;
-            }
+            // 1. Log ID / Timestamp
+            const timestampSpan = document.createElement('span');
+            timestampSpan.classList.add('log-timestamp');
+            // Format: [ID | HH:MM:SS.mmm]
+            timestampSpan.textContent = `[ ${String(logEntry.id).padStart(4, '0')} | ${logEntry.timestamp} ]`;
+            lineElement.appendChild(timestampSpan);
 
-            // --- Log Parsing and Metrics Calculation ---
+            // 2. Log Module
+            const moduleSpan = document.createElement('span');
+            moduleSpan.classList.add('log-module', 'text-sm');
+            // Pad the module name for alignment
+            moduleSpan.textContent = `[${logEntry.module.padEnd(12, ' ')}]`;
+            lineElement.appendChild(moduleSpan);
 
-            function getLogClass(level) {
-                switch(level) {
-                    case 'CRITICAL': return 'text-critical';
-                    case 'ERROR': return 'text-error'; 
-                    case 'RESTRICTION': return 'text-restriction';
-                    case 'WARN': return 'text-yellow-400';
-                    case 'SUCCESS': return 'text-green-400';
-                    case 'INFO':
-                    default: return 'text-gray-400';
+            // 3. Log Message and Level
+            const messageSpan = document.createElement('span');
+            messageSpan.classList.add(`LEVEL_${logEntry.level}`, 'flex-grow');
+            // Format: LEVEL   MESSAGE
+            const content = `${logEntry.level.padEnd(8, ' ')} ${logEntry.message}`;
+            messageSpan.textContent = content;
+
+            lineElement.appendChild(messageSpan);
+
+            return lineElement;
+        }
+
+        /**
+         * Main function to fetch data, update metrics, and refresh the logs display.
+         */
+        async function updateDashboard(fullRedraw = false) {
+            if (isFetching) return;
+            isFetching = true;
+
+            refreshButton.textContent = 'EXECUTING_REFRESH...';
+            refreshButton.disabled = true;
+
+            try {
+                const data = await mockFetchData();
+
+                // 1. Update Metrics
+                const m = data.metrics;
+                uptimeText.textContent = formatUptime(m.uptime);
+                memoryText.textContent = `${m.memory.toFixed(2)}`; // Removing 'MB' for cleaner display in value box
+                latencyText.textContent = `${m.latency}`; // Removing 'ms'
+
+                // Status coloring logic
+                statusText.className = statusText.className.replace(/text-(green|yellow|red|cyan)-400/g, '');
+                if (m.status === 'ONLINE' && m.latency < 80) {
+                    statusText.classList.add('text-green-400');
+                } else if (m.status === 'ONLINE' && m.latency >= 80) {
+                    statusText.classList.add('text-yellow-500');
+                } else {
+                    statusText.classList.add('text-red-400');
                 }
-            }
-            
-            /**
-             * Parses logs, renders them, and counts errors for charting.
-             */
-            function parseAndRenderLogs(logs, viewerElement) {
-                let errorCount = 0;
-                viewerElement.innerHTML = '';
                 
-                logs.forEach(logLine => {
-                    let level = 'INFO';
-                    let message = logLine;
-                    let timestamp = '00:00:00';
-                    let source = 'System';
-
-                    const match = logLine.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z)\]\s*(\S+)\s*-\s*(\S+)\s*:\s*(.*)/);
-
-                    if (match) {
-                        timestamp = match[1].substring(11, 19);
-                        level = match[2].toUpperCase().replace(/\[|\]/g, ''); 
-                        source = match[3]; 
-                        message = match[4].trim(); 
-                    } else {
-                        const simpleMatch = logLine.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z)\]\s*(\S+)\s*-\s*(\S+)\s*:(.*)/);
-                        if (simpleMatch) {
-                            timestamp = simpleMatch[1].substring(11, 19);
-                            level = simpleMatch[2].toUpperCase();
-                            source = simpleMatch[3];
-                            message = simpleMatch[4].trim();
-                        } else {
-                            message = logLine;
-                            level = logLine.includes('CRITICAL') ? 'CRITICAL' : logLine.includes('ERROR') ? 'ERROR' : 'INFO';
-                        }
-                    }
-                    
-                    if (['ERROR', 'CRITICAL', 'RESTRICTION'].includes(level)) {
-                        errorCount++;
-                    }
-
-                    const logClass = getLogClass(level);
-                    
-                    const logDiv = document.createElement('div');
-                    logDiv.className = 'log-entry py-1 border-b border-gray-700 last:border-b-0 text-white'; 
-                    
-                    logDiv.innerHTML = `
-                        <div class="flex flex-wrap items-baseline space-x-2">
-                            <span class="text-gray-500">${timestamp}</span> 
-                            <span class="font-bold ${logClass} uppercase">[${level}]</span> 
-                            <span class="font-medium text-indigo-300">(${source})</span>
-                            <span class="text-white flex-1">${message}</span>
-                        </div>
-                    `;
-                    
-                    viewerElement.appendChild(logDiv);
-                });
-                
-                return errorCount;
-            }
-
-            // --- Core Fetching Function (REAL LATENCY MEASUREMENT) ---
-
-            async function fetchLogs() {
-                const startTime = performance.now();
-                refreshButton.disabled = true;
-                refreshButton.textContent = 'Fetching...';
-                
-                try {
-                    const response = await fetch('/api/logs'); 
-                    if (!response.ok) {
-                        throw new Error(`Server returned status: ${response.status}`);
-                    }
-                    
-                    const data = await response.json();
-                    
-                    const endTime = performance.now();
-                    const liveLatency = Math.round(endTime - startTime); 
-                    
-                    latencyText.textContent = `${liveLatency} ms`;
-                    
-                    currentLogs = data.logs; 
-                    
-                    const totalErrors = parseAndRenderLogs(currentLogs, logViewer);
-                    parseAndRenderLogs(currentLogs, fullscreenLogContent);
-
-                    logCount.textContent = `${currentLogs.length} entries`;
-                    
-                    dashboardState.historical_latency.push(liveLatency);
-                    dashboardState.historical_memory.push(dashboardState.memory_usage_mb + getRandomInt(-10, 15)); 
-                    dashboardState.historical_errors.push(totalErrors);
-
-
-                    const maxHistory = 15;
-                    for (const key in dashboardState) {
-                        if (Array.isArray(dashboardState[key]) && dashboardState[key].length > maxHistory) {
-                             dashboardState[key] = dashboardState[key].slice(dashboardState[key].length - maxHistory);
-                        }
-                    }
-
-                    logViewer.scrollTop = logViewer.scrollHeight;
-
-                } catch (error) {
-                    logViewer.innerHTML = `<p class="text-red-400">❌ Error retrieving logs: ${error.message}. Ensure your bot server (keep_alive.js) is running and the /api/logs endpoint is accessible.</p>`;
-                    fullscreenLogContent.innerHTML = `<p class="text-red-400">❌ Error retrieving logs: ${error.message}.</p>`;
-           logCount.textContent = 'Error';
-                    latencyText.textContent = 'ERR';
-                } finally {
-                    refreshButton.disabled = false;
-                    refreshButton.textContent = 'Refresh';
+                // Latency coloring logic
+                latencyText.className = latencyText.className.replace(/text-(green|yellow|red)-400/g, '');
+                if (m.latency < 60) {
+                    latencyText.classList.add('text-green-400');
+                } else if (m.latency < 120) {
+                    latencyText.classList.add('text-yellow-500');
+                } else {
+                    latencyText.classList.add('text-red-400');
                 }
-            }
-            
-            // --- Status Update (Stable, Time-Based) ---
-            async function updateStatusMetrics() {
-                dashboardState.uptime_seconds += 10; 
+
+                // 2. Render Logs
+                const logsToRender = fullRedraw ? data.totalLogs : data.newLogs;
+
+                if (fullRedraw) {
+                    logOutput.innerHTML = '';
+                    modalLogContent.innerHTML = '';
+
+                    data.totalLogs.forEach(log => {
+                        const logElement = formatLogLine(log);
+                        logOutput.appendChild(logElement.cloneNode(true));
+                        modalLogContent.appendChild(logElement.cloneNode(true));
+                    });
+                } else {
+                    logsToRender.forEach(log => {
+                        const logElement = formatLogLine(log);
+                        logOutput.appendChild(logElement.cloneNode(true));
+                        modalLogContent.appendChild(logElement.cloneNode(true));
+                    });
+                }
+
+                // 3. Auto-scroll logic
+                logOutput.scrollTop = logOutput.scrollHeight;
+                if (!modalViewer.classList.contains('hidden')) {
+                     modalLogContent.scrollTop = modalLogContent.scrollHeight;
+                }
+
+            } catch (error) {
+                console.error('SYSTEM ERROR: Dashboard failed to execute network call.', error);
+                // Display critical failure
+                statusText.textContent = 'CRITICAL';
+                statusText.className = statusText.className.replace(/text-(green|yellow|red|cyan)-400/g, '') + ' text-red-400';
+
+                const fetchError = `[SYSTEM_FATAL] NETWORK INTERRUPTED. Cannot execute API call. (${error.message})`;
                 
-                statusText.textContent = dashboardState.status;
-                uptimeText.textContent = formatUptime(dashboardState.uptime_seconds);
-                memoryText.textContent = `${dashboardState.memory_usage_mb} MB`; 
-                lastChecked.textContent = new Date().toLocaleTimeString();
+                const errorLine = document.createElement('div');
+                errorLine.classList.add('log-line');
+                errorLine.innerHTML = `<span class="log-timestamp">[ X | 00:00:00.000 ]</span><span class="log-module">[ MONITOR:CORE ]</span><span class="log-message LEVEL_CRITICAL flex-grow">${fetchError}</span>`;
+
+                if (logOutput.innerHTML === '' || logOutput.lastElementChild.querySelector('.LEVEL_CRITICAL')) {
+                    logOutput.appendChild(errorLine.cloneNode(true));
+                    modalLogContent.appendChild(errorLine.cloneNode(true));
+                }
+
+            } finally {
+                isFetching = false;
+                refreshButton.textContent = 'MANUAL REFRESH';
+                refreshButton.disabled = false;
             }
+        }
 
-            // --- Chart Rendering Functions (Data-Driven) ---
-            
-            async function renderCharts() {
-                const labels = dashboardState.historical_latency.map((_, i) => `P${i + 1}`);
+        // --- Event Listeners and Initialization ---
 
-                const chartConfig = (data, label, color, type = 'line') => ({
-                    type: type,
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: label,
-                            data: data,
-                            borderColor: color,
-                            backgroundColor: color + '33', 
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false }, title: { display: false } },
-                        scales: {
-                            x: { grid: { display: false }, ticks: { color: '#4b5563', maxRotation: 0, autoSkip: true } },
-                            y: { beginAtZero: true, grid: { color: '#e5e7eb' }, ticks: { color: '#4b5563' } }
-                        }
-                    }
-                });
-                
-                const memoryCtx = document.getElementById('memoryChart');
-                const latencyCtx = document.getElementById('latencyChart');
-                const errorCtx = document.getElementById('errorChart');
-                
-                if (!memoryCtx || !latencyCtx || !errorCtx) return;
+        window.onload = function() {
+            updateDashboard(true);
+            setInterval(() => updateDashboard(false), REFRESH_INTERVAL_MS);
 
-                // 1. Memory Usage Chart
-                if (memoryChartInstance) memoryChartInstance.destroy();
-                memoryChartInstance = new Chart(memoryCtx, chartConfig(
-                    dashboardState.historical_memory, 'Memory Used (MB)', '#047857' 
-                ));
+            refreshButton.addEventListener('click', () => updateDashboard(false));
 
-                // 2. Latency Chart (Live Measurement Data)
-                if (latencyChartInstance) latencyChartInstance.destroy();
-                latencyChartInstance = new Chart(latencyCtx, chartConfig(
-                    dashboardState.historical_latency, 'Latency (ms)', '#4338ca' 
-                ));
-                
-                // 3. Daily Error Count Chart (Log Parsing Data)
-                if (errorChartInstance) errorChartInstance.destroy();
-                errorChartInstance = new Chart(errorCtx, chartConfig(
-                    dashboardState.historical_errors, 'Errors', '#b91c1c', 
-                    'bar'
-                ));
-            }
+            scaleButton.addEventListener('click', () => {
+                modalViewer.classList.remove('hidden');
+                updateDashboard(true); // Full redraw to refresh content and scroll
+            });
 
-
-            // --- Full Screen Log Handlers ---
-            function openFullScreenLog() {
-                fullscreenLog.classList.add('active');
-                fullscreenLogContent.scrollTop = fullscreenLogContent.scrollHeight; 
-            }
-
-            function closeFullScreenLog() {
-                fullscreenLog.classList.remove('active');
-            }
-
-
-            // --- Initialization and Events ---
-
-            async function refreshAll() {
-                updateStatusMetrics();
-                await fetchLogs();
-                await renderCharts(); 
-            }
-            
-            // Event Listeners
-            refreshButton.addEventListener('click', refreshAll);
-            scaleLogButton.addEventListener('click', openFullScreenLog);
-            closeLogButton.addEventListener('click', closeFullScreenLog);
-
-            // Initial load
-            refreshAll(); 
-            
-            // Set up auto-refresh for status (10s) and a log fetch (30s)
-            setInterval(updateStatusMetrics, 10000); 
-            setInterval(refreshAll, 30000);
-
-        })();
+            closeModalButton.addEventListener('click', () => {
+                modalViewer.classList.add('hidden');
+            });
+        };
     </script>
 </body>
-</html>
+    </html>
+    
