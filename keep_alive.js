@@ -1,9 +1,9 @@
 // 
-// --- EXPRESS KEEP-ALIVE SERVER (v2.1) ---
+// --- EXPRESS KEEP-ALIVE SERVER (v2.2) ---
 // 
 // Summary: Sets up a simple Express server to keep the Node process running.
 // It features clean routing for /dashboard and /donation (no .html extension), 
-// and a secure geolocation check endpoint.
+// and a secure geolocation check endpoint. The /logs endpoint is public.
 // 
 
 const express = require('express');
@@ -16,19 +16,10 @@ const axios = require('axios'); // For external API calls (Geolocation)
 const PORT = process.env.PORT || 3000;
 const LOG_FILE_PATH = path.join(__dirname, 'bot.log');
 const DASHBOARD_FILE_PATH = path.join(__dirname, 'dashboard.html');
-const DONATION_FILE_PATH = path.join(__dirname, 'donation.htm'); // New file path
+// Correct file path for the donation page: donation.htm
+const DONATION_FILE_PATH = path.join(__dirname, 'donation.htm'); 
 const ICON_PATH = path.join(__dirname, 'Discord-Server', 'data', 'logo_icon.png');
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'super-secret-admin-key-12345';
-
-// Middleware to check API Key for privileged routes
-function checkApiKey(req, res, next) {
-    const providedKey = req.query.key;
-    if (providedKey && providedKey === ADMIN_API_KEY) {
-        next();
-    } else {
-        res.status(401).send('Unauthorized. Missing or invalid API key.');
-    }
-}
+// ADMIN_API_KEY is kept for future use but not used for logs
 
 // --- Route Definitions ---
 
@@ -59,12 +50,13 @@ app.get('/status', (req, res) => {
     res.json(status);
 });
 
-// 5. Log Viewer Route (Requires API Key)
-app.get('/logs', checkApiKey, (req, res) => {
+// 5. Log Viewer Route (NOW PUBLIC - No API Key Check)
+app.get('/logs', (req, res) => {
     fs.readFile(LOG_FILE_PATH, 'utf8', (err, data) => {
         if (err) {
             console.error('Error reading log file:', err.message);
-            return res.status(500).json({ error: 'Could not retrieve log file.' });
+            // Return an empty array if the log file doesn't exist yet
+            return res.json({ logs: ['{"timestamp":"'+new Date().toISOString()+'","level":"ERROR","source":"SYSTEM","message":"Log file not found. Bot might not have started yet."}'] });
         }
         const logLines = data.split('\n').filter(line => line.trim() !== '');
         res.json({ logs: logLines.reverse() }); 
