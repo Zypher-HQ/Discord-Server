@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Bot Admin Dashboard</title>
+    
+    <!-- 🟢 Favicon Implementation: Points to the server's favicon route -->
+    <link rel="icon" type="image/png" href="/favicon.ico"> 
+
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --primary-color: #4f46e5;
+        --accent-color: #10b981;
+        --discord-color: #5865F2;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f4f7f9;
+      }
+      /* Custom scrollbar style for the log viewer */
+      #log-viewer {
+        max-height: 400px;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+      }
+      #log-viewer::-webkit-scrollbar {
+        width: 8px;
+      }
+      #log-viewer::-webkit-scrollbar-thumb {
+        background-color: #9ca3af;
+        border-radius: 4px;
+      }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        
+        <!-- Header -->
+        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-4">
+                
+                <!-- 🟢 Discord Logo Link -->
+                <a href="https://discord.gg/FVnw46BEY" target="_blank" class="transition transform hover:scale-110" aria-label="Join Discord Server">
+                    <!-- Custom Discord SVG Logo -->
+                    <svg viewBox="0 0 71 55" fill="#5865F2" class="w-10 h-10 shadow-lg rounded-xl p-1 bg-white hover:bg-gray-100 transition duration-300" role="img" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M60.1 5.7c-5.7 2.8-11.7 4.7-18.4 5.3 0 0-0.7 0.2-1.3 0.6 -0.6 0.4-0.9 0.7-1.1 1.2 -1.1 1.2-1.2 2.7-1.2 4.1 0 0.8 0 1.6 0 2.4 0 0.8 0 1.6 0 2.4 0 1.4-0.1 2.9 1.2 4.1 0.2 0.5 0.5 0.8 1.1 1.2 0.6 0.4 1.3 0.6 1.3 0.6 6.7 0.6 12.7 2.5 18.4 5.3 0 0 0.9 0.4 1.8 0.6 0.9 0.2 1.5 0.2 2.2 0.2 0.7 0 1.3 0 2.2-0.2 0.9-0.2 1.8-0.6 1.8-0.6 5.7-2.8 11.7-4.7 18.4-5.3 0 0 0.7-0.2 1.3-0.6 0.6-0.4 0.9-0.7 1.1-1.2 1.1-1.2 1.2-2.7 1.2-4.1 0-0.8 0-1.6 0-2.4 0-0.8 0-1.6 0-2.4 0-1.4 0.1-2.9-1.2-4.1-0.2-0.5-0.5-0.8-1.1-1.2-0.6-0.4-1.3-0.6-1.3-0.6-6.7-0.6-12.7-2.5-18.4-5.3-0.4-0.2-0.9-0.3-1.4-0.3 0 0-0.6-0.1-1.2-0.1-0.6 0-1.2 0-1.2 0-0.5 0-1 0.1-1.4 0.3-5.7 2.8-11.7 4.7-18.4 5.3-0.4 0.1-0.8 0.1-1.2 0.1-0.4 0-0.8 0-1.2-0.1-6.7-0.6-12.7-2.5-18.4-5.3-0.4-0.2-0.8-0.3-1.2-0.3-0.4 0-0.8 0-1.2 0-0.4 0-0.8 0-1.2 0-0.4 0-0.8 0.1-1.2 0.3-5.7 2.8-11.7 4.7-18.4 5.3z"/>
+                    </svg>
+                </a>
+
+                <h1 class="text-2xl font-bold text-gray-800">Bot Service Dashboard</h1>
+            </div>
+            
+            <div class="flex space-x-3">
+                <!-- 🟢 Donate Button (Clean URL) -->
+                <a href="/donation" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 transform hover:scale-105">
+                    💸 Donate
+                </a>
+
+                <button id="refresh-button" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 transform hover:scale-105">
+                    Refresh Data
+                </button>
+            </div>
+        </header>
+
+        <!-- API Key Input -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+            <label for="admin-key" class="block text-sm font-medium text-gray-700 mb-2">Admin API Key for Logs/Privileged Access</label>
+            <input type="password" id="admin-key" placeholder="Enter your secret admin key" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+
+        <!-- Status & Metrics -->
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Real-Time Metrics</h2>
+        <div id="status-container" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <!-- Status Card -->
+            <div id="status-card" class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-gray-400">
+                <p class="text-sm font-medium text-gray-500">Service Status</p>
+                <p class="text-2xl font-bold mt-1 text-gray-800 flex items-center">
+                    <span id="bot-status-indicator" class="w-3 h-3 rounded-full mr-2 bg-yellow-500 animate-pulse"></span>
+                    <span id="bot-status-text">Loading...</span>
+                </p>
+            </div>
+            <!-- Uptime Card -->
+            <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-indigo-500">
+                <p class="text-sm font-medium text-gray-500">Process Uptime</p>
+                <p id="uptime-text" class="text-2xl font-bold mt-1 text-indigo-600">--</p>
+            </div>
+            <!-- Memory Card -->
+            <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-green-500">
+                <p class="text-sm font-medium text-gray-500">Memory Usage (MB)</p>
+                <p id="memory-text" class="text-2xl font-bold mt-1 text-green-600">--</p>
+            </div>
+        </div>
+
+        <!-- Log Viewer -->
+        <h2 class="text-xl font-semibold text-gray-700 mb-4 flex justify-between items-center">
+            Structured Bot Logs (Newest First)
+            <span id="log-count" class="text-sm font-medium text-gray-500">0 entries</span>
+        </h2>
+        <div id="log-viewer" class="bg-gray-800 p-4 rounded-xl shadow-inner text-xs space-y-1">
+            <p class="text-gray-400">Enter API Key and click Refresh to load logs...</p>
+        </div>
+        
+    </div>
+
+    <script>
+        // IIFE for scope isolation
+        (function() {
+            const statusCard = document.getElementById('status-card');
+            const statusIndicator = document.getElementById('bot-status-indicator');
+            const statusText = document.getElementById('bot-status-text');
+            const uptimeText = document.getElementById('uptime-text');
+            const memoryText = document.getElementById('memory-text');
+            const logViewer = document.getElementById('log-viewer');
+            const logCount = document.getElementById('log-count');
+            const refreshButton = document.getElementById('refresh-button');
+            const adminKeyInput = document.getElementById('admin-key');
+            
+            // --- Utility Functions ---
+            function formatUptime(seconds) {
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = Math.floor(seconds % 60);
+                return `${h}h ${m}m ${s}s`;
+            }
+
+            function getLogClass(level) {
+                switch(level) {
+                    case 'ERROR': return 'text-red-400';
+                    case 'WARN': return 'text-yellow-400';
+                    case 'SUCCESS': return 'text-green-400';
+                    case 'ALERT': return 'text-orange-400';
+                    case 'BLOCKED': return 'text-purple-400';
+                    case 'REVOKE': return 'text-pink-400';
+                    case 'INFO':
+                    default: return 'text-gray-200';
+                }
+            }
+            
+            // --- Core Fetching Functions ---
+
+            // Exponential backoff retry logic for API calls
+            async function fetchWithRetry(url, options, maxRetries = 3, delay = 1000) {
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (!response.ok) {
+                             if (response.status === 401) throw new Error('Unauthorized');
+                             throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return await response.json();
+                    } catch (error) {
+                        if (error.message === 'Unauthorized') throw error; 
+                        if (i === maxRetries - 1) throw error;
+                        await new Promise(resolve => setTimeout(resolve, delay * (2 ** i)));
+                    }
+                }
+            }
+
+            // 1. Fetch Bot Status
+            async function fetchStatus() {
+                try {
+                    const data = await fetchWithRetry('/status', { method: 'GET' });
+                    
+                    statusText.textContent = data.status;
+                    uptimeText.textContent = formatUptime(data.uptime_seconds);
+                    memoryText.textContent = `${data.memory_usage_mb} MB`;
+
+                    if (data.status === 'UP') {
+                        statusIndicator.className = 'w-3 h-3 rounded-full mr-2 bg-green-500';
+                        statusCard.className = statusCard.className.replace(/border-gray-400|border-red-500/, 'border-green-500');
+                    } else {
+                        statusIndicator.className = 'w-3 h-3 rounded-full mr-2 bg-red-500';
+                        statusCard.className = statusCard.className.replace(/border-gray-400|border-green-500/, 'border-red-500');
+                    }
+                } catch (error) {
+                    statusText.textContent = 'DOWN';
+                    statusIndicator.className = 'w-3 h-3 rounded-full mr-2 bg-red-500';
+                    statusCard.className = statusCard.className.replace(/border-gray-400|border-green-500/, 'border-red-500');
+                    console.error("Failed to fetch status:", error.message);
+                }
+            }
+
+            // 2. Fetch Bot Logs
+            async function fetchLogs(apiKey) {
+                if (!apiKey) {
+                    logViewer.innerHTML = `<p class="text-yellow-400">⚠️ Please enter the Admin API Key to view logs.</p>`;
+                    logCount.textContent = '0 entries';
+                    return;
+                }
+                
+                logViewer.innerHTML = '<p class="text-gray-400 animate-pulse">Loading logs...</p>';
+
+                try {
+                    const data = await fetchWithRetry(`/logs?key=${apiKey}`, { method: 'GET' });
+                    
+                    logViewer.innerHTML = ''; 
+                    logCount.textContent = `${data.logs.length} entries`;
+
+                    data.logs.forEach(logLine => {
+                        try {
+                            const entry = JSON.parse(logLine);
+                            const logClass = getLogClass(entry.level);
+                            
+                            const logDiv = document.createElement('div');
+                            logDiv.className = 'log-entry py-1 border-b border-gray-700 last:border-b-0';
+                            
+                            logDiv.innerHTML = `
+                                <span class="font-mono text-gray-500">${entry.timestamp.substring(11, 19)}</span> 
+                                <span class="font-bold ${logClass} uppercase">[${entry.level}]</span> 
+                                <span class="font-medium text-indigo-300">(${entry.source})</span>
+                                <span class="text-white">${entry.message}</span>
+                            `;
+                            
+                            const metadataKeys = Object.keys(entry).filter(k => !['timestamp', 'level', 'source', 'message'].includes(k));
+                            if (metadataKeys.length > 0) {
+                                logDiv.innerHTML += `
+                                    <span class="text-xs text-gray-400 block ml-2 sm:ml-4">
+                                        Context: ${JSON.stringify(Object.fromEntries(metadataKeys.map(k => [k, entry[k]]))).replace(/"/g, '')}
+                                    </span>
+                                `;
+                            }
+                            logViewer.appendChild(logDiv);
+
+                        } catch (e) {
+                            logViewer.innerHTML += `<div class="text-xs text-gray-400">${logLine}</div>`;
+                        }
+                    });
+
+                } catch (error) {
+                    logViewer.innerHTML = `<p class="text-red-400">❌ Error retrieving logs: ${error.message}.</p>`;
+                    console.error("Failed to fetch logs:", error.message);
+                }
+            }
+
+            // --- Initialization and Events ---
+
+            async function refreshAll() {
+                refreshButton.disabled = true;
+                refreshButton.textContent = 'Loading...';
+                
+                await fetchStatus();
+                await fetchLogs(adminKeyInput.value);
+
+                refreshButton.disabled = false;
+                refreshButton.textContent = 'Refresh Data';
+            }
+            
+            // Event Listener
+            refreshButton.addEventListener('click', refreshAll);
+            
+            // Initial load
+            refreshAll(); 
+            
+            // Set up auto-refresh for status every 10 seconds
+            setInterval(fetchStatus, 10000); 
+
+        })();
+    </script>
+</body>
+</html>
+
