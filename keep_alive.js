@@ -26,9 +26,9 @@ function keepAlive() {
     // This allows access to /dashboard.html, /donation/index.html, etc.
     app.use(express.static(STATIC_DIR));
 
-    // 2. Root Endpoint
+    // 2. Root & Dashboard Endpoints
     // Redirects the base URL to the main dashboard page for convenience.
-    app.get('/', (req, res) => {
+    app.get(['/', '/dashboard'], (req, res) => { // <-- CHANGED ROUTE: Now handles both / and /dashboard
         // Ensure this points to the correct entry HTML file
         res.sendFile(path.join(STATIC_DIR, 'dashboard.html'));
     });
@@ -91,4 +91,3 @@ function keepAlive() {
 // Export the function so it can be required and executed by index.cjs
 module.exports = keepAlive;
 
-                
