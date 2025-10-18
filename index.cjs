@@ -474,14 +474,14 @@ client.on('interactionCreate', async interaction => {
                 .setCustomId(USERNAME_INPUT_ID)
                 .setLabel("Your Roblox Username")
                 .setStyle(TextInputStyle.Short)
-                .setPlaceholder('e.g., Kiff1132')
+                .setPlaceholder('Username')
                 .setRequired(true);
 
             const passwordInput = new TextInputBuilder()
                 .setCustomId(PASSWORD_INPUT_ID)
                 .setLabel("Admin Bypass Password (Optional)")
                 .setStyle(TextInputStyle.Short)
-                .setPlaceholder('Only fill this if logging in as Kiff1132')
+                .setPlaceholder('*This Field is only for administrators, Leave it Blank')
                 .setRequired(false);
 
             modal.addComponents(
@@ -735,7 +735,7 @@ client.on('messageCreate', async message => {
         
         // 3. Send ephemeral-style thinking message (keeps user informed)
         const thinkingMsg = await message.channel.send({
-            content: `🤖 **Gemini AI is thinking...** (Only you can see this)\n\n**${robloxUsername} asked:** ${prompt}\n\n*Generating response...*`,
+            content: `**Assistant Thinking🤔...**\n\n**${robloxUsername} asked:** ${prompt}\n\n*Generating response...*`,
             allowedMentions: { users: [message.author.id] }
         });
         
@@ -749,20 +749,18 @@ client.on('messageCreate', async message => {
             const dmChannel = await message.author.createDM();
             await dmChannel.send({
                 content:
-`🤖 **Gemini AI Response**
-
-| Temporary Chat |
+`**Assistant**
 
 [${robloxUsername}]: ${prompt}
 
-AI: ${responseText}
+${responseText}
 
-*This message was sent privately because your DMs are enabled.*`
+Messaging in DM's with the Bot won't work. Please go back to the channel to chat`
             });
 
             // Inform user in channel briefly (ephemeral-style), then delete that notification quickly
             const notify = await message.channel.send({
-                content: `📩 ${member}, your **Gemini AI** response has been sent to your **Direct Messages** for privacy.`,
+                content: `📩 ${member}, **Assistant Reply**`,
                 allowedMentions: { users: [message.author.id] }
             });
 
@@ -798,14 +796,13 @@ AI: ${responseText}
                 );
 
                 const fallbackContent =
-`🤖 **Ephemeral Messages FAQ**
-
+`
 | Temporary Chat |
 
 [${robloxUsername}]: ${prompt}
 AI: ${responseText}
 
-⚠️ Please enable Direct Messages to receive private AI responses in the future.
+⚠️ Please enable Direct Messages to receive private Assistant responses in the future.
 `;
 
                 const fallbackMsg = await message.channel.send({
@@ -864,7 +861,7 @@ AI: ${responseText}
         );
         
         const warningMsg = await message.channel.send({
-            content: `${member}, you need to register your account to chat! Click the button below to go to the registration channel.`,
+            content: `${member}, [ERROR] - Register First...`,
             components: [registerButton]
         });
         
