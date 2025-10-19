@@ -1,19 +1,22 @@
 // --- keep_alive.js ---
-// Sets up the Express server, starts the web listener, and manages in-memory logs.
+// This file sets up the Express server for the web service (keeps it alive),
+// ensures correct port binding for cloud hosting, and implements the in-memory
+// structured logging system used by the dashboard.
 
 const express = require('express');
 const app = express();
 const path = require('path');
 const originalLog = console.log;
 
-// --- Log Storage ---
-const MAX_LOGS_IN_MEMORY = 100; // Keep the last 100 logs
+// --- Log Storage: In-memory buffer ---
+const MAX_LOGS_IN_MEMORY = 150; // Keep the last 150 logs
 const logBuffer = [];
 let logIdCounter = 1;
 
 
 /**
- * Parses the structured log format from index.cjs and adds it to the buffer.
+ * OVERRIDES console.log. This function now handles standard console output 
+ * AND buffers the logs for the dashboard API.
  */
 console.log = (logLine) => {
     // 1. Log to the console (standard behavior)
@@ -31,7 +34,7 @@ console.log = (logLine) => {
              
              const logEntry = {
                  id: logIdCounter++,
-                 timestamp: new Date(timestamp).getTime(),
+                 timestamp: new Date(timestamp).getTime(), // Unix timestamp for easy sorting/display
                  level: level.trim(),
                  module: module.trim(),
                  message: message
@@ -40,39 +43,50 @@ console.log = (logLine) => {
              logBuffer.push(logEntry);
 
              if (logBuffer.length > MAX_LOGS_IN_MEMORY) {
-                 logBuffer.shift(); // Remove oldest log
+                 logBuffer.shift(); // Remove oldest log to prevent memory overflow
              }
+        } else {
+             // Capture non-structured log lines (e.g., startup messages from Express/Node)
+             logBuffer.push({
+                id: logIdCounter++,
+                timestamp: Date.now(),
+                level: 'RAW',
+                module: 'SYSTEM_RAW',
+                message: logLine
+            });
+            if (logBuffer.length > MAX_LOGS_IN_MEMORY) logBuffer.shift();
         }
     } catch (e) {
-        // Fallback for logs that don't match the structure
+        // Fallback for unexpected log errors
         logBuffer.push({
             id: logIdCounter++,
             timestamp: Date.now(),
-            level: 'INFO',
-            module: 'SYSTEM_ERR',
-            message: logLine
+            level: 'ERROR',
+            module: 'LOG_ERR',
+            message: 'Failed to process log line: ' + logLine
         });
         if (logBuffer.length > MAX_LOGS_IN_MEMORY) logBuffer.shift();
     }
 };
 
-// Store the custom log function reference so index.cjs can call it directly
+// Expose the custom log function reference so index.cjs can call it directly
 console._log = console.log;
 
 
 // --- Server Setup (FIXED: Port Binding) ---
 
-// Get the port from the hosting environment (e.g., Render) or default to 3000
+// CRITICAL FIX: Use the port provided by the hosting environment or default to 3000
 const PORT = process.env.PORT || 3000;
 
-// Serve ALL static files (HTML, CSS, JS, donation, etc.) from the 'public' directory
+// Serve ALL static files (e.g., dashboard.html) from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public'))); 
 
 // Start the server using the correct PORT
 app.listen(PORT, () => {
-    originalLog(`\n--- KEEP ALIVE SERVER ---`);
-    originalLog(`Web server running on port ${PORT}, serving static files from /public.`);
-    originalLog(`--- /SERVER ---\n`);
+    originalLog(`\n--- KEEP ALIVE SERVER STATUS ---`);
+    originalLog(`Web service successfully bound to Port ${PORT}.`);
+    originalLog(`Serving dashboard files from /public.`);
+    originalLog(`--- /SERVER STATUS ---\n`);
 });
 
 
@@ -83,6 +97,6 @@ function getLogList() {
     return logBuffer;
 }
 
-// Export app and the log list getter for use in index.cjs
+// Export the Express app instance and the log getter for index.cjs
 module.exports = { app, getLogList };
 
